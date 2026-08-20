@@ -1,0 +1,18 @@
+@import "tailwindcss";
+
+@theme {
+  --color-sage: #add195; /* Color principal */
+  --color-sky: #71ceff; /* Acento tecnológico, enlaces, interactivos */
+  --color-coral: #e88f95; /* Énfasis, alertas, detalles */
+  --color-lilac: #d798e7; /* Acento creativo, elementos secundarios */
+  --color-peach: #ffcc8b; /* Acento cálido, fondos suaves */
+  --color-ink: #2d323d; /* Texto principal y fondos oscuros */
+}
+
+/* Tema oscuro como base — coincide con los wireframes de referencia */
+@layer base {
+  body {
+    background-color: var(--color-ink);
+    color: #f5f5f4;
+  }
+}
