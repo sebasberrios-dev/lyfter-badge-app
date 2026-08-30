@@ -15,6 +15,12 @@ export class BadgeRepository implements IBadgeRepository {
     });
   }
 
+  async findByQrToken(qrToken: string): Promise<Badge | null> {
+    return prisma.badge.findUnique({
+      where: { qrToken },
+    });
+  }
+
   async findMany(filters: BadgeFilters): Promise<Badge[]> {
     return prisma.badge.findMany({
       where: {

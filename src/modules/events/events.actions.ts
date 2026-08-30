@@ -21,6 +21,7 @@ import {
   updateEventInput,
 } from "./events.types";
 import { revalidatePath } from "next/cache";
+import { logAuditSafe } from "../audit-log/audit-log.service";
 
 export async function getPublicEventsHandler(
   filters?: Omit<EventFilters, "status">,
@@ -70,7 +71,7 @@ export async function createEventHandler(
   companyId: number,
 ) {
   try {
-    await requireRole(["SUPER_ADMIN", "COMPANY_ADMIN"]);
+    const session = await requireRole(["SUPER_ADMIN", "COMPANY_ADMIN"]);
     await requireCompanyOwnership(companyId);
 
     const parsed = createEventSchema.safeParse(data);
@@ -79,6 +80,16 @@ export async function createEventHandler(
     }
 
     const event = await createEvent(parsed.data, companyId);
+
+    await logAuditSafe({
+      userId: session.userId,
+      action: "CREATE",
+      entity: "EVENT",
+      entityId: event.id,
+      companyId,
+      eventId: event.id,
+    });
+
     revalidatePath("/admin/events");
     return { success: true, data: event };
   } catch (err) {
@@ -100,7 +111,7 @@ export async function updateEventHandler(
   data: updateEventInput,
 ) {
   try {
-    await requireRole(["SUPER_ADMIN", "COMPANY_ADMIN"]);
+    const session = await requireRole(["SUPER_ADMIN", "COMPANY_ADMIN"]);
 
     const existingEvent = await getEventById(eventId);
     await requireCompanyOwnership(existingEvent.companyId);
@@ -111,6 +122,16 @@ export async function updateEventHandler(
     }
 
     const updatedEvent = await updateEvent(eventId, parsed.data);
+
+    await logAuditSafe({
+      userId: session.userId,
+      action: "UPDATE",
+      entity: "EVENT",
+      entityId: eventId,
+      companyId: existingEvent.companyId,
+      eventId,
+    });
+
     revalidatePath("/admin/events");
     return { success: true, data: updatedEvent };
   } catch (err) {
@@ -130,8 +151,17 @@ export async function updateEventHandler(
 
 export async function deleteEventHandler(eventId: number) {
   try {
-    await requireRole(["SUPER_ADMIN"]);
+    const session = await requireRole(["SUPER_ADMIN"]);
     const deleted = await deleteEvent(eventId);
+
+    await logAuditSafe({
+      userId: session.userId,
+      action: "DELETE",
+      entity: "EVENT",
+      entityId: eventId,
+      companyId: deleted.companyId,
+      eventId,
+    });
 
     return { success: true, data: deleted };
   } catch (err) {

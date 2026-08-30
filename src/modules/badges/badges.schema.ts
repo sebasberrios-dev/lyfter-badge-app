@@ -14,4 +14,8 @@ export const createBadgeSchema = z.object({
   rarity: z.enum(BadgeRarity),
 });
 
+export const badgeQrTokenQuerySchema = z.object({
+  qrToken: z.string().min(1, "qrToken requerido"),
+});
+
 export const updateBadgeSchema = createBadgeSchema.partial();

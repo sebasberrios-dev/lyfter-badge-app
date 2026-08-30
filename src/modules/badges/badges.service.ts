@@ -26,7 +26,16 @@ export async function getBadgeById(badgeId: number) {
   return badge;
 }
 
-export async function getBadgeByField(filters: BadgeFilters) {
+export async function getBadgeByQrToken(qrToken: string) {
+  const badge = await badgeRepo.findByQrToken(qrToken);
+  if (!badge) {
+    throw new BadgeNotFoundError();
+  }
+
+  return badge;
+}
+
+export async function getBadgesByField(filters: BadgeFilters) {
   return badgeRepo.findMany(filters);
 }
 

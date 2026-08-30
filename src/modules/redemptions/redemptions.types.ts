@@ -1,4 +1,6 @@
 import { EventRegistration, Prisma, Redemption } from "@prisma/client";
+import z from "zod";
+import { redeemBadgeSchema } from "./redemptions.schema";
 
 export type RedemptionFilters = {
   userId?: number;
@@ -29,6 +31,8 @@ export type RedeemAtomicResult =
       newTotalXp: number;
       newEventXp: number;
     };
+
+export type redeemBadgeInput = z.infer<typeof redeemBadgeSchema>;
 
 export interface IRedemptionRepository {
   findMany(filters: RedemptionFilters): Promise<RedemptionWithBadge[]>;

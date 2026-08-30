@@ -3,6 +3,8 @@ import { verifyQrToken } from "@/lib/qr-token";
 import { isWithinEventRadius } from "@/lib/geolocation";
 import { getBadgeById } from "../badges/badges.service";
 import { getEventById } from "../events/events.service";
+import { getLevelForXp, didLevelUp } from "../xp-levels/xp-levels.service";
+import { LevelInfo } from "../xp-levels/xp-levels.types";
 import { RedemptionRepository } from "./redemptions.repository";
 import {
   BadgeDoesNotMatchEventError,
@@ -36,6 +38,8 @@ export type RedeemBadgeResult =
       newTotalXp: number;
       newEventXp: number;
       flagged: boolean;
+      level: LevelInfo;
+      leveledUp: boolean;
     };
 
 export async function redeemBadge(
@@ -118,6 +122,8 @@ export async function redeemBadge(
     return { alreadyRedeemed: true, badge: badgeSummary };
   }
 
+  const xpBefore = result.newTotalXp - badge.xpValue;
+
   return {
     alreadyRedeemed: false,
     badge: badgeSummary,
@@ -125,5 +131,7 @@ export async function redeemBadge(
     newTotalXp: result.newTotalXp,
     newEventXp: result.newEventXp,
     flagged,
+    level: getLevelForXp(result.newTotalXp),
+    leveledUp: didLevelUp(xpBefore, result.newTotalXp),
   };
 }

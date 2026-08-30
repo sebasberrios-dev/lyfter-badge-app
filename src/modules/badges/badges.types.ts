@@ -12,6 +12,7 @@ export type BadgeFilters = {
 
 export interface IBadgeRepository {
   findById(id: number): Promise<BadgeWithCompany | null>;
+  findByQrToken(qrToken: string): Promise<Badge | null>;
   findMany(filters: BadgeFilters): Promise<Badge[]>;
   create(data: Prisma.BadgeUncheckedCreateInput): Promise<Badge>;
   update(id: number, data: updateBadgeInput): Promise<Badge>;

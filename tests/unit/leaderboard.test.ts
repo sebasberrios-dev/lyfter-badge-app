@@ -1,0 +1,130 @@
+import { describe, it, expect, vi, beforeEach } from "vitest";
+
+const mockLeaderboardRepo = vi.hoisted(() => ({
+  findTopUsersByTotalXp: vi.fn(),
+  findTopRegistrationsByEventXp: vi.fn(),
+  findRedemptionBadgeTypesForUsersInEvent: vi.fn(),
+}));
+
+const mockGetEventById = vi.hoisted(() => vi.fn());
+
+vi.mock("@/modules/leaderboard/leaderboard.repository", () => ({
+  LeaderboardRepository: vi.fn(function () {
+    return mockLeaderboardRepo;
+  }),
+}));
+
+vi.mock("@/modules/events/events.service", () => ({
+  getEventById: mockGetEventById,
+}));
+
+import {
+  getGlobalLeaderboard,
+  getEventLeaderboard,
+} from "@/modules/leaderboard/leaderboard.service";
+import {
+  getGlobalLeaderboardHandler,
+  getEventLeaderboardHandler,
+} from "@/modules/leaderboard/leaderboard.actions";
+import { EventNotFoundError } from "@/modules/events/events.errors";
+
+beforeEach(() => {
+  vi.resetAllMocks();
+});
+
+describe("leaderboard: getGlobalLeaderboard", () => {
+  it("asigna rank correlativo en el orden que devuelve el repository, con el nivel correcto", async () => {
+    mockLeaderboardRepo.findTopUsersByTotalXp.mockResolvedValueOnce([
+      { id: 8, name: "User B", totalXp: 900 },
+      { id: 7, name: "User A", totalXp: 500 },
+      { id: 9, name: "User C", totalXp: 200 },
+    ]);
+
+    const result = await getGlobalLeaderboard(50);
+
+    expect(result).toEqual([
+      { rank: 1, userId: 8, name: "User B", totalXp: 900, level: expect.objectContaining({ level: 4 }) },
+      { rank: 2, userId: 7, name: "User A", totalXp: 500, level: expect.objectContaining({ level: 3 }) },
+      { rank: 3, userId: 9, name: "User C", totalXp: 200, level: expect.objectContaining({ level: 2 }) },
+    ]);
+  });
+
+  it("pasa el limit al repository", async () => {
+    mockLeaderboardRepo.findTopUsersByTotalXp.mockResolvedValueOnce([]);
+
+    await getGlobalLeaderboard(10);
+
+    expect(mockLeaderboardRepo.findTopUsersByTotalXp).toHaveBeenCalledWith(10);
+  });
+
+  it("usa DEFAULT_LEADERBOARD_LIMIT si no se pasa limit", async () => {
+    mockLeaderboardRepo.findTopUsersByTotalXp.mockResolvedValueOnce([]);
+
+    await getGlobalLeaderboard();
+
+    expect(mockLeaderboardRepo.findTopUsersByTotalXp).toHaveBeenCalledWith(50);
+  });
+});
+
+describe("leaderboard: getEventLeaderboard", () => {
+  it("cuenta talksAttended/boothsVisited por usuario a partir de los canjes", async () => {
+    mockGetEventById.mockResolvedValueOnce({ id: 10, companyId: 1 });
+    mockLeaderboardRepo.findTopRegistrationsByEventXp.mockResolvedValueOnce([
+      { userId: 9, eventXp: 50, user: { name: "User C" } },
+      { userId: 7, eventXp: 30, user: { name: "User A" } },
+      { userId: 8, eventXp: 10, user: { name: "User B" } },
+    ]);
+    mockLeaderboardRepo.findRedemptionBadgeTypesForUsersInEvent.mockResolvedValueOnce([
+      { userId: 9, badgeType: "TALK" },
+      { userId: 9, badgeType: "BOOTH" },
+      { userId: 7, badgeType: "TALK" },
+      { userId: 8, badgeType: "BOOTH" },
+    ]);
+
+    const result = await getEventLeaderboard(10);
+
+    expect(result).toEqual([
+      { rank: 1, userId: 9, name: "User C", eventXp: 50, talksAttended: 1, boothsVisited: 1 },
+      { rank: 2, userId: 7, name: "User A", eventXp: 30, talksAttended: 1, boothsVisited: 0 },
+      { rank: 3, userId: 8, name: "User B", eventXp: 10, talksAttended: 0, boothsVisited: 1 },
+    ]);
+  });
+
+  it("un usuario sin canjes en el evento queda con los conteos en 0", async () => {
+    mockGetEventById.mockResolvedValueOnce({ id: 10, companyId: 1 });
+    mockLeaderboardRepo.findTopRegistrationsByEventXp.mockResolvedValueOnce([
+      { userId: 7, eventXp: 0, user: { name: "User A" } },
+    ]);
+    mockLeaderboardRepo.findRedemptionBadgeTypesForUsersInEvent.mockResolvedValueOnce([]);
+
+    const result = await getEventLeaderboard(10);
+
+    expect(result[0].talksAttended).toBe(0);
+    expect(result[0].boothsVisited).toBe(0);
+  });
+
+  it("evento inexistente propaga EventNotFoundError sin llegar a consultar registrations", async () => {
+    mockGetEventById.mockRejectedValueOnce(new EventNotFoundError());
+
+    await expect(getEventLeaderboard(999999)).rejects.toThrow(EventNotFoundError);
+    expect(mockLeaderboardRepo.findTopRegistrationsByEventXp).not.toHaveBeenCalled();
+  });
+});
+
+describe("leaderboard: actions (Server Actions publicos, sin auth)", () => {
+  it("getGlobalLeaderboardHandler envuelve el resultado en {success: true, data}", async () => {
+    mockLeaderboardRepo.findTopUsersByTotalXp.mockResolvedValueOnce([]);
+
+    const result = await getGlobalLeaderboardHandler();
+
+    expect(result).toEqual({ success: true, data: [] });
+  });
+
+  it("getEventLeaderboardHandler envuelve EventNotFoundError en {success: false, error}", async () => {
+    mockGetEventById.mockRejectedValueOnce(new EventNotFoundError());
+
+    const result = await getEventLeaderboardHandler(999999);
+
+    expect(result).toEqual({ success: false, error: "evento no encontrado" });
+  });
+});

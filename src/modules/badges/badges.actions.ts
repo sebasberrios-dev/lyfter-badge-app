@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import {
   getAllBadges,
   getBadgeById,
-  getBadgeByField,
+  getBadgesByField,
   createBadge,
   updateBadge,
   deleteBadge,
@@ -28,6 +28,7 @@ import {
 import { createBadgeSchema, updateBadgeSchema } from "./badges.schema";
 import { getEventById } from "../events/events.service";
 import { EventNotFoundError } from "../events/events.errors";
+import { logAuditSafe } from "../audit-log/audit-log.service";
 
 export async function getAllBadgesHandler() {
   try {
@@ -75,7 +76,7 @@ export async function getBadgeByFieldHandler(filters?: BadgeFilters) {
         ? filters?.companyId
         : session.companyId) ?? undefined;
 
-    const badges = await getBadgeByField({
+    const badges = await getBadgesByField({
       ...filters,
       companyId: resolvedCompanyId,
     });
@@ -95,7 +96,7 @@ export async function createBadgeHandler(
   data: createBadgeInput,
 ) {
   try {
-    await requireRole(["SUPER_ADMIN", "COMPANY_ADMIN"]);
+    const session = await requireRole(["SUPER_ADMIN", "COMPANY_ADMIN"]);
 
     const event = await getEventById(eventId);
     await requireCompanyOwnership(event.companyId);
@@ -106,6 +107,16 @@ export async function createBadgeHandler(
     }
 
     const badge = await createBadge(eventId, parsed.data);
+
+    await logAuditSafe({
+      userId: session.userId,
+      action: "CREATE",
+      entity: "BADGE",
+      entityId: badge.id,
+      companyId: event.companyId,
+      eventId,
+    });
+
     revalidatePath("/admin/events");
     return { success: true, data: badge };
   } catch (err) {
@@ -128,7 +139,7 @@ export async function updateBadgeHandler(
   data: updateBadgeInput,
 ) {
   try {
-    await requireRole(["SUPER_ADMIN", "COMPANY_ADMIN"]);
+    const session = await requireRole(["SUPER_ADMIN", "COMPANY_ADMIN"]);
 
     const existingBadge = await getBadgeById(badgeId);
     await requireCompanyOwnership(existingBadge.event.companyId);
@@ -139,6 +150,16 @@ export async function updateBadgeHandler(
     }
 
     const updatedBadge = await updateBadge(badgeId, parsed.data);
+
+    await logAuditSafe({
+      userId: session.userId,
+      action: "UPDATE",
+      entity: "BADGE",
+      entityId: badgeId,
+      companyId: existingBadge.event.companyId,
+      eventId: existingBadge.eventId,
+    });
+
     revalidatePath("/admin/events");
     return { success: true, data: updatedBadge };
   } catch (err) {
@@ -158,12 +179,22 @@ export async function updateBadgeHandler(
 
 export async function deleteBadgeHandler(badgeId: number) {
   try {
-    await requireRole(["SUPER_ADMIN", "COMPANY_ADMIN"]);
+    const session = await requireRole(["SUPER_ADMIN", "COMPANY_ADMIN"]);
 
     const existingBadge = await getBadgeById(badgeId);
     await requireCompanyOwnership(existingBadge.event.companyId);
 
     const deleted = await deleteBadge(badgeId);
+
+    await logAuditSafe({
+      userId: session.userId,
+      action: "DELETE",
+      entity: "BADGE",
+      entityId: badgeId,
+      companyId: existingBadge.event.companyId,
+      eventId: existingBadge.eventId,
+    });
+
     revalidatePath("/admin/events");
     return { success: true, data: deleted };
   } catch (err) {
