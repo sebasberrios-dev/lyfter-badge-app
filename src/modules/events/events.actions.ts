@@ -1,5 +1,5 @@
 "use server";
-import { requireRole, requireCompanyOwnership } from "@/lib/auth-guard";
+import { requireAuth, requireRole, requireCompanyOwnership } from "@/lib/auth-guard";
 import { ForbiddenError, UnauthenticatedError } from "@/lib/auth-guard";
 import {
   EventNotFoundError,
@@ -27,6 +27,26 @@ export async function getPublicEventsHandler(
   filters?: Omit<EventFilters, "status">,
 ) {
   return getEventsByField({ ...filters, status: ["ACTIVE", "FINISHED"] });
+}
+
+export async function getEventByIdHandler(eventId: number) {
+  try {
+    await requireAuth();
+    const event = await getEventById(eventId);
+
+    if (event.status === "DRAFT") {
+      return { success: false, error: "evento no encontrado" };
+    }
+
+    return { success: true, data: event };
+  } catch (err) {
+    if (err instanceof EventNotFoundError || err instanceof UnauthenticatedError) {
+      return { success: false, error: err.message };
+    }
+
+    console.error(err);
+    return { success: false, error: "error del servidor" };
+  }
 }
 
 export async function adminsGetEventsHandler(

@@ -1,5 +1,6 @@
 "use server";
 import { z } from "zod";
+import { Badge } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import {
   getAllBadges,
@@ -12,6 +13,7 @@ import {
 import {
   UnauthenticatedError,
   ForbiddenError,
+  requireAuth,
   requireRole,
   requireCompanyOwnership,
 } from "@/lib/auth-guard";
@@ -83,6 +85,24 @@ export async function getBadgeByFieldHandler(filters?: BadgeFilters) {
     return { success: true, data: badges };
   } catch (err) {
     if (err instanceof UnauthenticatedError || err instanceof ForbiddenError) {
+      return { success: false, error: err.message };
+    }
+
+    console.error(err);
+    return { success: false, error: "error del servidor" };
+  }
+}
+
+export type PublicBadgeSummary = Omit<Badge, "qrToken">;
+
+export async function getBadgesForEventHandler(eventId: number) {
+  try {
+    await requireAuth();
+    const badges = await getBadgesByField({ eventId });
+    const data: PublicBadgeSummary[] = badges.map(({ qrToken: _qrToken, ...rest }) => rest);
+    return { success: true, data };
+  } catch (err) {
+    if (err instanceof UnauthenticatedError) {
       return { success: false, error: err.message };
     }
 

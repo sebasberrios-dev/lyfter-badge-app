@@ -45,6 +45,7 @@ import {
   createEventHandler,
   updateEventHandler,
   deleteEventHandler,
+  getEventByIdHandler,
 } from "@/modules/events/events.actions";
 import {
   EventNotFoundError,
@@ -52,6 +53,7 @@ import {
   EventCannotBeDeletedError,
 } from "@/modules/events/events.errors";
 import {
+  requireAuth,
   requireRole,
   requireCompanyOwnership,
   UnauthenticatedError,
@@ -187,6 +189,64 @@ describe("events: deleteEvent (service)", () => {
     );
 
     await expect(deleteEvent(1)).rejects.toThrow(EventCannotBeDeletedError);
+  });
+});
+
+describe("events: getEventByIdHandler (action)", () => {
+  const participantSession = {
+    userId: 1,
+    role: "PARTICIPANT" as const,
+    companyId: null,
+    expiresAt: new Date(),
+  };
+
+  it("happy: evento ACTIVE se devuelve normalmente", async () => {
+    vi.mocked(requireAuth).mockResolvedValueOnce(participantSession);
+    mockEventRepo.findById.mockResolvedValueOnce({ id: 1, status: "ACTIVE" });
+
+    const result = await getEventByIdHandler(1);
+
+    expect(result).toEqual({ success: true, data: { id: 1, status: "ACTIVE" } });
+  });
+
+  it("happy: evento FINISHED tambien se devuelve", async () => {
+    vi.mocked(requireAuth).mockResolvedValueOnce(participantSession);
+    mockEventRepo.findById.mockResolvedValueOnce({ id: 1, status: "FINISHED" });
+
+    const result = await getEventByIdHandler(1);
+
+    expect(result.success).toBe(true);
+  });
+
+  it("unhappy: evento en DRAFT se trata como no encontrado (no se filtra solo en UI)", async () => {
+    vi.mocked(requireAuth).mockResolvedValueOnce(participantSession);
+    mockEventRepo.findById.mockResolvedValueOnce({ id: 1, status: "DRAFT" });
+
+    const result = await getEventByIdHandler(1);
+
+    expect(result).toEqual({ success: false, error: "evento no encontrado" });
+  });
+
+  it("unhappy: evento inexistente -> EventNotFoundError", async () => {
+    vi.mocked(requireAuth).mockResolvedValueOnce(participantSession);
+    mockEventRepo.findById.mockResolvedValueOnce(null);
+
+    const result = await getEventByIdHandler(999999);
+
+    expect(result).toEqual({ success: false, error: "evento no encontrado" });
+  });
+
+  it("unhappy: sin sesion -> {success:false, error}", async () => {
+    vi.mocked(requireAuth).mockRejectedValueOnce(
+      new UnauthenticatedError("se requiere iniciar sesión"),
+    );
+
+    const result = await getEventByIdHandler(1);
+
+    expect(result).toEqual({
+      success: false,
+      error: "se requiere iniciar sesión",
+    });
   });
 });
 

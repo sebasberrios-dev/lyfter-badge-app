@@ -4,9 +4,11 @@ const mockLeaderboardRepo = vi.hoisted(() => ({
   findTopUsersByTotalXp: vi.fn(),
   findTopRegistrationsByEventXp: vi.fn(),
   findRedemptionBadgeTypesForUsersInEvent: vi.fn(),
+  countUsersWithHigherXp: vi.fn(),
 }));
 
 const mockGetEventById = vi.hoisted(() => vi.fn());
+const mockGetUserProfile = vi.hoisted(() => vi.fn());
 
 vi.mock("@/modules/leaderboard/leaderboard.repository", () => ({
   LeaderboardRepository: vi.fn(function () {
@@ -18,15 +20,31 @@ vi.mock("@/modules/events/events.service", () => ({
   getEventById: mockGetEventById,
 }));
 
+vi.mock("@/modules/users/users.service", () => ({
+  getUserProfile: mockGetUserProfile,
+}));
+
+vi.mock("@/lib/auth-guard", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/auth-guard")>();
+  return {
+    ...actual,
+    requireAuth: vi.fn(),
+  };
+});
+
 import {
   getGlobalLeaderboard,
   getEventLeaderboard,
+  getUserGlobalRank,
 } from "@/modules/leaderboard/leaderboard.service";
 import {
   getGlobalLeaderboardHandler,
   getEventLeaderboardHandler,
+  getMyGlobalRankHandler,
 } from "@/modules/leaderboard/leaderboard.actions";
 import { EventNotFoundError } from "@/modules/events/events.errors";
+import { UserNotFoundError } from "@/modules/users/users.errors";
+import { requireAuth, UnauthenticatedError } from "@/lib/auth-guard";
 
 beforeEach(() => {
   vi.resetAllMocks();
@@ -126,5 +144,73 @@ describe("leaderboard: actions (Server Actions publicos, sin auth)", () => {
     const result = await getEventLeaderboardHandler(999999);
 
     expect(result).toEqual({ success: false, error: "evento no encontrado" });
+  });
+});
+
+describe("leaderboard: getUserGlobalRank (service)", () => {
+  it("rank 1 cuando nadie tiene mas XP", async () => {
+    mockGetUserProfile.mockResolvedValueOnce({ id: 1, totalXp: 500 });
+    mockLeaderboardRepo.countUsersWithHigherXp.mockResolvedValueOnce(0);
+
+    const result = await getUserGlobalRank(1);
+
+    expect(mockLeaderboardRepo.countUsersWithHigherXp).toHaveBeenCalledWith(500);
+    expect(result).toEqual({
+      rank: 1,
+      totalXp: 500,
+      level: expect.objectContaining({ level: 3 }),
+    });
+  });
+
+  it("rank = cantidad de usuarios con mas XP + 1", async () => {
+    mockGetUserProfile.mockResolvedValueOnce({ id: 1, totalXp: 100 });
+    mockLeaderboardRepo.countUsersWithHigherXp.mockResolvedValueOnce(4);
+
+    const result = await getUserGlobalRank(1);
+
+    expect(result.rank).toBe(5);
+  });
+
+  it("usuario inexistente propaga UserNotFoundError", async () => {
+    mockGetUserProfile.mockRejectedValueOnce(new UserNotFoundError());
+
+    await expect(getUserGlobalRank(999999)).rejects.toThrow(UserNotFoundError);
+    expect(mockLeaderboardRepo.countUsersWithHigherXp).not.toHaveBeenCalled();
+  });
+});
+
+describe("leaderboard: getMyGlobalRankHandler (action)", () => {
+  const participantSession = {
+    userId: 1,
+    role: "PARTICIPANT" as const,
+    companyId: null,
+    expiresAt: new Date(),
+  };
+
+  it("happy: usa el userId de la sesion, no uno pasado por el cliente", async () => {
+    vi.mocked(requireAuth).mockResolvedValueOnce(participantSession);
+    mockGetUserProfile.mockResolvedValueOnce({ id: 1, totalXp: 100 });
+    mockLeaderboardRepo.countUsersWithHigherXp.mockResolvedValueOnce(0);
+
+    const result = await getMyGlobalRankHandler();
+
+    expect(mockGetUserProfile).toHaveBeenCalledWith(1);
+    expect(result).toEqual({
+      success: true,
+      data: { rank: 1, totalXp: 100, level: expect.objectContaining({ level: 2 }) },
+    });
+  });
+
+  it("unhappy: sin sesion -> {success:false, error}", async () => {
+    vi.mocked(requireAuth).mockRejectedValueOnce(
+      new UnauthenticatedError("se requiere iniciar sesión"),
+    );
+
+    const result = await getMyGlobalRankHandler();
+
+    expect(result).toEqual({
+      success: false,
+      error: "se requiere iniciar sesión",
+    });
   });
 });

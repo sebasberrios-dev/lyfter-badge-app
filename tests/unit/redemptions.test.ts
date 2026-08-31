@@ -4,6 +4,7 @@ const mockRedemptionRepo = vi.hoisted(() => ({
   findMany: vi.fn(),
   create: vi.fn(),
   findRegistration: vi.fn(),
+  findRegistrationsByUser: vi.fn(),
   redeemAtomic: vi.fn(),
 }));
 
@@ -24,11 +25,27 @@ vi.mock("@/modules/events/events.service", () => ({
   getEventById: mockGetEventById,
 }));
 
+vi.mock("@/lib/auth-guard", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/auth-guard")>();
+  return {
+    ...actual,
+    requireAuth: vi.fn(),
+  };
+});
+
 // lib/qr-token.ts (firma/verifica JWT) y lib/geolocation.ts (Haversine) NO se
 // mockean -- son criptografia/matematica pura sin DB, dejarlos reales le da
 // valor genuino a estos tests (tokens firmados/verificados de verdad).
 import { signQrToken } from "@/lib/qr-token";
-import { redeemBadge } from "@/modules/redemptions/redemptions.service";
+import {
+  redeemBadge,
+  getMyRedemptions,
+  getUserRegisteredEvents,
+} from "@/modules/redemptions/redemptions.service";
+import {
+  getMyRedemptionsHandler,
+  getMyRegisteredEventsHandler,
+} from "@/modules/redemptions/redemptions.actions";
 import {
   InvalidTokenError,
   ExpiredTokenError,
@@ -37,6 +54,7 @@ import {
   EventAlreadyEndedError,
   UserNotRegisteredToEventError,
 } from "@/modules/redemptions/redemptions.errors";
+import { requireAuth, UnauthenticatedError } from "@/lib/auth-guard";
 
 beforeEach(() => {
   vi.resetAllMocks();
@@ -370,5 +388,80 @@ describe("redemptions: redeemBadge - geolocalizacion", () => {
     const result: any = await redeemBadge(1, token);
 
     expect(result.flagged).toBe(false);
+  });
+});
+
+const participantSession = {
+  userId: 1,
+  role: "PARTICIPANT" as const,
+  companyId: null,
+  expiresAt: new Date(),
+};
+
+describe("redemptions: getMyRedemptions / getUserRegisteredEvents (service)", () => {
+  it("getMyRedemptions pasa el userId como filtro al repository", async () => {
+    mockRedemptionRepo.findMany.mockResolvedValueOnce([{ id: 1 }]);
+
+    const result = await getMyRedemptions(1);
+
+    expect(mockRedemptionRepo.findMany).toHaveBeenCalledWith({ userId: 1 });
+    expect(result).toEqual([{ id: 1 }]);
+  });
+
+  it("getUserRegisteredEvents pasa el userId al repository", async () => {
+    mockRedemptionRepo.findRegistrationsByUser.mockResolvedValueOnce([{ eventId: 10 }]);
+
+    const result = await getUserRegisteredEvents(1);
+
+    expect(mockRedemptionRepo.findRegistrationsByUser).toHaveBeenCalledWith(1);
+    expect(result).toEqual([{ eventId: 10 }]);
+  });
+});
+
+describe("redemptions: getMyRedemptionsHandler / getMyRegisteredEventsHandler (actions)", () => {
+  it("getMyRedemptionsHandler happy: scoped al userId de la sesion", async () => {
+    vi.mocked(requireAuth).mockResolvedValueOnce(participantSession);
+    mockRedemptionRepo.findMany.mockResolvedValueOnce([{ id: 1 }]);
+
+    const result = await getMyRedemptionsHandler();
+
+    expect(mockRedemptionRepo.findMany).toHaveBeenCalledWith({ userId: 1 });
+    expect(result).toEqual({ success: true, data: [{ id: 1 }] });
+  });
+
+  it("getMyRedemptionsHandler unhappy: sin sesion -> {success:false, error}", async () => {
+    vi.mocked(requireAuth).mockRejectedValueOnce(
+      new UnauthenticatedError("se requiere iniciar sesión"),
+    );
+
+    const result = await getMyRedemptionsHandler();
+
+    expect(result).toEqual({
+      success: false,
+      error: "se requiere iniciar sesión",
+    });
+  });
+
+  it("getMyRegisteredEventsHandler happy: scoped al userId de la sesion", async () => {
+    vi.mocked(requireAuth).mockResolvedValueOnce(participantSession);
+    mockRedemptionRepo.findRegistrationsByUser.mockResolvedValueOnce([{ eventId: 10 }]);
+
+    const result = await getMyRegisteredEventsHandler();
+
+    expect(mockRedemptionRepo.findRegistrationsByUser).toHaveBeenCalledWith(1);
+    expect(result).toEqual({ success: true, data: [{ eventId: 10 }] });
+  });
+
+  it("getMyRegisteredEventsHandler unhappy: sin sesion -> {success:false, error}", async () => {
+    vi.mocked(requireAuth).mockRejectedValueOnce(
+      new UnauthenticatedError("se requiere iniciar sesión"),
+    );
+
+    const result = await getMyRegisteredEventsHandler();
+
+    expect(result).toEqual({
+      success: false,
+      error: "se requiere iniciar sesión",
+    });
   });
 });

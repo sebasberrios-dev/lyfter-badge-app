@@ -135,3 +135,11 @@ export async function redeemBadge(
     leveledUp: didLevelUp(xpBefore, result.newTotalXp),
   };
 }
+
+export async function getMyRedemptions(userId: number) {
+  return redemptionRepo.findMany({ userId });
+}
+
+export async function getUserRegisteredEvents(userId: number) {
+  return redemptionRepo.findRegistrationsByUser(userId);
+}

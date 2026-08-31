@@ -41,6 +41,19 @@ export async function login(data: PublicLoginInput) {
   return user;
 }
 
+export async function getUserProfile(
+  userId: number,
+): Promise<Omit<User, "password">> {
+  const user = await userRepo.findById(userId);
+
+  if (!user) {
+    throw new UserNotFoundError();
+  }
+
+  const { password: _password, ...profile } = user;
+  return profile;
+}
+
 export async function promoteToCompanyAdmin(userId: number, companyId: number) {
   const user = await userRepo.findById(userId);
 

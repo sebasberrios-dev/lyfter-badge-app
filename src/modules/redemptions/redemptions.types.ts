@@ -11,7 +11,11 @@ export type RedemptionFilters = {
 };
 
 export type RedemptionWithBadge = Prisma.RedemptionGetPayload<{
-  include: { badge: true };
+  include: { badge: { include: { event: true } } };
+}>;
+
+export type EventRegistrationWithEvent = Prisma.EventRegistrationGetPayload<{
+  include: { event: true };
 }>;
 
 export type RedeemAtomicParams = {
@@ -41,5 +45,6 @@ export interface IRedemptionRepository {
     userId: number,
     eventId: number,
   ): Promise<EventRegistration | null>;
+  findRegistrationsByUser(userId: number): Promise<EventRegistrationWithEvent[]>;
   redeemAtomic(params: RedeemAtomicParams): Promise<RedeemAtomicResult>;
 }

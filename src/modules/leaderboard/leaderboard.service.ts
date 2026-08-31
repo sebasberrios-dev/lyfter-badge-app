@@ -1,7 +1,12 @@
 import { getEventById } from "../events/events.service";
+import { getUserProfile } from "../users/users.service";
 import { getLevelForXp } from "../xp-levels/xp-levels.service";
 import { LeaderboardRepository } from "./leaderboard.repository";
-import { EventLeaderboardEntry, GlobalLeaderboardEntry } from "./leaderboard.types";
+import {
+  EventLeaderboardEntry,
+  GlobalLeaderboardEntry,
+  UserGlobalRank,
+} from "./leaderboard.types";
 
 const leaderboardRepo = new LeaderboardRepository();
 
@@ -60,4 +65,15 @@ export async function getEventLeaderboard(
     talksAttended: countsByUser.get(registration.userId)?.talksAttended ?? 0,
     boothsVisited: countsByUser.get(registration.userId)?.boothsVisited ?? 0,
   }));
+}
+
+export async function getUserGlobalRank(userId: number): Promise<UserGlobalRank> {
+  const profile = await getUserProfile(userId);
+  const higherCount = await leaderboardRepo.countUsersWithHigherXp(profile.totalXp);
+
+  return {
+    rank: higherCount + 1,
+    totalXp: profile.totalXp,
+    level: getLevelForXp(profile.totalXp),
+  };
 }

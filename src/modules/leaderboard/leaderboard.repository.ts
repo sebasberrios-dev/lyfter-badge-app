@@ -42,4 +42,8 @@ export class LeaderboardRepository implements ILeaderboardRepository {
 
     return redemptions.map((r) => ({ userId: r.userId, badgeType: r.badge.type }));
   }
+
+  async countUsersWithHigherXp(totalXp: number): Promise<number> {
+    return prisma.user.count({ where: { totalXp: { gt: totalXp } } });
+  }
 }

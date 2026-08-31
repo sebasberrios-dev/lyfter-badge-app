@@ -35,6 +35,12 @@ export type RedemptionBadgeType = {
   badgeType: BadgeType;
 };
 
+export type UserGlobalRank = {
+  rank: number;
+  totalXp: number;
+  level: LevelInfo;
+};
+
 export interface ILeaderboardRepository {
   findTopUsersByTotalXp(limit: number): Promise<TopUserByTotalXp[]>;
   findTopRegistrationsByEventXp(
@@ -45,4 +51,5 @@ export interface ILeaderboardRepository {
     eventId: number,
     userIds: number[],
   ): Promise<RedemptionBadgeType[]>;
+  countUsersWithHigherXp(totalXp: number): Promise<number>;
 }

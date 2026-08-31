@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import {
+  EventRegistrationWithEvent,
   IRedemptionRepository,
   RedeemAtomicParams,
   RedeemAtomicResult,
@@ -20,7 +21,17 @@ export class RedemptionRepository implements IRedemptionRepository {
           lte: filters.redeemAtTo,
         },
       },
-      include: { badge: true },
+      include: { badge: { include: { event: true } } },
+    });
+  }
+
+  async findRegistrationsByUser(
+    userId: number,
+  ): Promise<EventRegistrationWithEvent[]> {
+    return prisma.eventRegistration.findMany({
+      where: { userId },
+      include: { event: true },
+      orderBy: { registeredAt: "desc" },
     });
   }
 

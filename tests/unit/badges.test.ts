@@ -52,6 +52,7 @@ import {
   createBadgeHandler,
   updateBadgeHandler,
   deleteBadgeHandler,
+  getBadgesForEventHandler,
 } from "@/modules/badges/badges.actions";
 import {
   BadgeNotFoundError,
@@ -60,6 +61,7 @@ import {
 } from "@/modules/badges/badges.errors";
 import { EventNotFoundError } from "@/modules/events/events.errors";
 import {
+  requireAuth,
   requireRole,
   requireCompanyOwnership,
   UnauthenticatedError,
@@ -207,6 +209,42 @@ describe("badges: deleteBadge (service)", () => {
     );
 
     await expect(deleteBadge(1)).rejects.toThrow(BadgeCannotBeDeletedError);
+  });
+});
+
+describe("badges: getBadgesForEventHandler (action)", () => {
+  it("happy: nunca incluye el qrToken en el resultado", async () => {
+    vi.mocked(requireAuth).mockResolvedValueOnce({
+      userId: 1,
+      role: "PARTICIPANT",
+      companyId: null,
+      expiresAt: new Date(),
+    });
+    mockBadgeRepo.findMany.mockResolvedValueOnce([
+      { id: 1, name: "Badge A", eventId: 10, qrToken: "secreto-super-largo" },
+      { id: 2, name: "Badge B", eventId: 10, qrToken: "otro-secreto" },
+    ]);
+
+    const result: any = await getBadgesForEventHandler(10);
+
+    expect(result.success).toBe(true);
+    expect(result.data).toHaveLength(2);
+    for (const badge of result.data) {
+      expect(badge).not.toHaveProperty("qrToken");
+    }
+  });
+
+  it("unhappy: sin sesion -> {success:false, error}", async () => {
+    vi.mocked(requireAuth).mockRejectedValueOnce(
+      new UnauthenticatedError("se requiere iniciar sesión"),
+    );
+
+    const result = await getBadgesForEventHandler(10);
+
+    expect(result).toEqual({
+      success: false,
+      error: "se requiere iniciar sesión",
+    });
   });
 });
 
