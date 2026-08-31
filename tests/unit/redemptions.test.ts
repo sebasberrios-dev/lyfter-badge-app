@@ -6,9 +6,11 @@ const mockRedemptionRepo = vi.hoisted(() => ({
   findRegistration: vi.fn(),
   findRegistrationsByUser: vi.fn(),
   redeemAtomic: vi.fn(),
+  countRedeemedInEvent: vi.fn(),
 }));
 
 const mockGetBadgeById = vi.hoisted(() => vi.fn());
+const mockGetBadgesByField = vi.hoisted(() => vi.fn());
 const mockGetEventById = vi.hoisted(() => vi.fn());
 
 vi.mock("@/modules/redemptions/redemptions.repository", () => ({
@@ -19,6 +21,7 @@ vi.mock("@/modules/redemptions/redemptions.repository", () => ({
 
 vi.mock("@/modules/badges/badges.service", () => ({
   getBadgeById: mockGetBadgeById,
+  getBadgesByField: mockGetBadgesByField,
 }));
 
 vi.mock("@/modules/events/events.service", () => ({
@@ -58,6 +61,10 @@ import { requireAuth, UnauthenticatedError } from "@/lib/auth-guard";
 
 beforeEach(() => {
   vi.resetAllMocks();
+  // Por defecto, sin badges de evento cargados -> eventCompleted:false. Los
+  // tests de completitud pisan esto explícitamente con mockResolvedValueOnce.
+  mockGetBadgesByField.mockResolvedValue([]);
+  mockRedemptionRepo.countRedeemedInEvent.mockResolvedValue(0);
 });
 
 const now = new Date();
@@ -184,6 +191,80 @@ describe("redemptions: redeemBadge - happy paths", () => {
 
     expect(result.leveledUp).toBe(false);
     expect(result.level.level).toBe(1);
+  });
+});
+
+describe("redemptions: redeemBadge - completitud del evento y premio", () => {
+  it("canje que completa el evento -> eventCompleted:true, prizeDescription presente", async () => {
+    const badge = makeBadge({ id: 2, type: "TALK", xpValue: 20 });
+    const token = await signQrToken({ badgeId: badge.id, eventId: badge.eventId });
+    mockGetBadgeById.mockResolvedValueOnce(badge);
+    mockGetEventById.mockResolvedValueOnce({
+      ...activeEvent,
+      prizeDescription: "Una laptop",
+    });
+    mockRedemptionRepo.findRegistration.mockResolvedValueOnce({ userId: 1 });
+    mockRedemptionRepo.redeemAtomic.mockResolvedValueOnce({
+      alreadyRedeemed: false,
+      redemption: { id: 2 },
+      newTotalXp: 30,
+      newEventXp: 30,
+    });
+    mockGetBadgesByField.mockResolvedValueOnce([{ id: 1 }, { id: 2 }]);
+    mockRedemptionRepo.countRedeemedInEvent.mockResolvedValueOnce(2);
+
+    const result: any = await redeemBadge(1, token);
+
+    expect(result.eventCompleted).toBe(true);
+    expect(result.prizeDescription).toBe("Una laptop");
+  });
+
+  it("canje que no completa el evento -> eventCompleted:false, prizeDescription:null", async () => {
+    const badge = makeBadge({ id: 2, type: "TALK", xpValue: 20 });
+    const token = await signQrToken({ badgeId: badge.id, eventId: badge.eventId });
+    mockGetBadgeById.mockResolvedValueOnce(badge);
+    mockGetEventById.mockResolvedValueOnce({
+      ...activeEvent,
+      prizeDescription: "Una laptop",
+    });
+    mockRedemptionRepo.findRegistration.mockResolvedValueOnce({ userId: 1 });
+    mockRedemptionRepo.redeemAtomic.mockResolvedValueOnce({
+      alreadyRedeemed: false,
+      redemption: { id: 2 },
+      newTotalXp: 30,
+      newEventXp: 30,
+    });
+    mockGetBadgesByField.mockResolvedValueOnce([{ id: 1 }, { id: 2 }, { id: 3 }]);
+    mockRedemptionRepo.countRedeemedInEvent.mockResolvedValueOnce(2);
+
+    const result: any = await redeemBadge(1, token);
+
+    expect(result.eventCompleted).toBe(false);
+    expect(result.prizeDescription).toBeNull();
+  });
+
+  it("evento sin prizeDescription configurado que igual se completa -> eventCompleted:true, prizeDescription:null", async () => {
+    const badge = makeBadge({ id: 2, type: "TALK", xpValue: 20 });
+    const token = await signQrToken({ badgeId: badge.id, eventId: badge.eventId });
+    mockGetBadgeById.mockResolvedValueOnce(badge);
+    mockGetEventById.mockResolvedValueOnce({
+      ...activeEvent,
+      prizeDescription: null,
+    });
+    mockRedemptionRepo.findRegistration.mockResolvedValueOnce({ userId: 1 });
+    mockRedemptionRepo.redeemAtomic.mockResolvedValueOnce({
+      alreadyRedeemed: false,
+      redemption: { id: 2 },
+      newTotalXp: 30,
+      newEventXp: 30,
+    });
+    mockGetBadgesByField.mockResolvedValueOnce([{ id: 1 }, { id: 2 }]);
+    mockRedemptionRepo.countRedeemedInEvent.mockResolvedValueOnce(2);
+
+    const result: any = await redeemBadge(1, token);
+
+    expect(result.eventCompleted).toBe(true);
+    expect(result.prizeDescription).toBeNull();
   });
 });
 

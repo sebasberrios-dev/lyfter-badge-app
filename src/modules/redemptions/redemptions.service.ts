@@ -1,7 +1,7 @@
 import { BadgeRarity, BadgeType } from "@prisma/client";
 import { verifyQrToken } from "@/lib/qr-token";
 import { isWithinEventRadius } from "@/lib/geolocation";
-import { getBadgeById } from "../badges/badges.service";
+import { getBadgeById, getBadgesByField } from "../badges/badges.service";
 import { getEventById } from "../events/events.service";
 import { getLevelForXp, didLevelUp } from "../xp-levels/xp-levels.service";
 import { LevelInfo } from "../xp-levels/xp-levels.types";
@@ -40,6 +40,8 @@ export type RedeemBadgeResult =
       flagged: boolean;
       level: LevelInfo;
       leveledUp: boolean;
+      eventCompleted: boolean;
+      prizeDescription: string | null;
     };
 
 export async function redeemBadge(
@@ -124,6 +126,14 @@ export async function redeemBadge(
 
   const xpBefore = result.newTotalXp - badge.xpValue;
 
+  const totalBadges = await getBadgesByField({ eventId: event.id });
+  const redeemedCount = await redemptionRepo.countRedeemedInEvent(
+    userId,
+    event.id,
+  );
+  const eventCompleted =
+    totalBadges.length > 0 && redeemedCount === totalBadges.length;
+
   return {
     alreadyRedeemed: false,
     badge: badgeSummary,
@@ -133,6 +143,8 @@ export async function redeemBadge(
     flagged,
     level: getLevelForXp(result.newTotalXp),
     leveledUp: didLevelUp(xpBefore, result.newTotalXp),
+    eventCompleted,
+    prizeDescription: eventCompleted ? event.prizeDescription : null,
   };
 }
 

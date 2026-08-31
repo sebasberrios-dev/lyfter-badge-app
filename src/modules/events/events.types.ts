@@ -12,9 +12,14 @@ export type EventFilters = {
   startDateFrom?: Date;
   startDateTo?: Date;
 };
+
+export type EventWithCompany = Prisma.EventGetPayload<{
+  include: { company: { select: { name: true } } };
+}>;
+
 export interface IEventRepository {
   findById(id: number): Promise<Event | null>;
-  findMany(filters: EventFilters): Promise<Event[]>;
+  findMany(filters: EventFilters): Promise<EventWithCompany[]>;
   create(data: Prisma.EventUncheckedCreateInput): Promise<Event>;
   update(id: number, data: updateEventInput): Promise<Event>;
   delete(id: number): Promise<Event>;

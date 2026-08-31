@@ -10,7 +10,7 @@ import { Badge as UiBadge } from "@/components/ui/badge";
 import { formatEventDate, cn } from "@/lib/utils";
 import Link from "next/link";
 import { buttonVariants } from "@/components/ui/button";
-import { MapPin } from "lucide-react";
+import { Lock, MapPin, Trophy } from "lucide-react";
 
 export default async function EventDetailPage({
   params,
@@ -38,6 +38,7 @@ export default async function EventDetailPage({
       .map((redemption) => redemption.badgeId),
   );
   const leaderboardEntries = leaderboardResult.success ? leaderboardResult.data ?? [] : [];
+  const isComplete = badges.length > 0 && redeemedBadgeIds.size === badges.length;
 
   return (
     <div className="mx-auto max-w-lg space-y-6 px-4 py-6">
@@ -56,11 +57,18 @@ export default async function EventDetailPage({
           )}
         </div>
         <p className="text-sm text-muted-foreground">{event.description}</p>
-        {event.prizeDescription && (
-          <p className="rounded-lg bg-primary/10 p-3 text-sm text-foreground">
-            🏆 Premio: {event.prizeDescription}
-          </p>
-        )}
+        {event.prizeDescription &&
+          (isComplete ? (
+            <p className="flex items-start gap-2 rounded-lg bg-primary/10 p-3 text-sm text-foreground">
+              <Trophy className="size-4 shrink-0 translate-y-0.5 text-primary" />
+              <span>Premio: {event.prizeDescription}</span>
+            </p>
+          ) : (
+            <p className="flex items-start gap-2 rounded-lg bg-muted/50 p-3 text-sm text-muted-foreground">
+              <Lock className="size-4 shrink-0 translate-y-0.5" />
+              <span>Completá todos los badges de este evento para desbloquear el premio.</span>
+            </p>
+          ))}
       </div>
 
       <section className="space-y-3">

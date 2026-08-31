@@ -13,6 +13,7 @@ const eventObjectSchema = z.object({
   modality: z.enum(EventModality),
   startDate: z.date(),
   endDate: z.date(),
+  prizeDescription: z.string().optional(),
 });
 
 export const createEventSchema = eventObjectSchema.refine(

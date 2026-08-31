@@ -1,5 +1,6 @@
 import {
   EventFilters,
+  EventWithCompany,
   IEventRepository,
   updateEventInput,
 } from "./events.types";
@@ -11,7 +12,7 @@ export class EventRepository implements IEventRepository {
     return prisma.event.findUnique({ where: { id } });
   }
 
-  async findMany(filters: EventFilters): Promise<Event[]> {
+  async findMany(filters: EventFilters): Promise<EventWithCompany[]> {
     return prisma.event.findMany({
       where: {
         name: filters.name
@@ -31,6 +32,7 @@ export class EventRepository implements IEventRepository {
           lte: filters.startDateTo,
         },
       },
+      include: { company: { select: { name: true } } },
     });
   }
 

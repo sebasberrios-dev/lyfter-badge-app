@@ -47,4 +47,5 @@ export interface IRedemptionRepository {
   ): Promise<EventRegistration | null>;
   findRegistrationsByUser(userId: number): Promise<EventRegistrationWithEvent[]>;
   redeemAtomic(params: RedeemAtomicParams): Promise<RedeemAtomicResult>;
+  countRedeemedInEvent(userId: number, eventId: number): Promise<number>;
 }

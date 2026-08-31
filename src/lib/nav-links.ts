@@ -3,7 +3,6 @@ import { Award, Home, Trophy, User } from "lucide-react";
 export const PUBLIC_NAV_LINKS = [
   { href: "/events", label: "Eventos" },
   { href: "/how-it-works", label: "Cómo funciona" },
-  { href: "/leaderboard", label: "Leaderboard" },
   { href: "/prizes", label: "Premios" },
 ] as const;
 

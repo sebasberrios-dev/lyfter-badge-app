@@ -67,6 +67,11 @@ export function ScanToast({ result, onDismiss }: ScanToastProps) {
                 {result.data.leveledUp && ` · ¡Nivel ${result.data.level.level}!`}
               </p>
             )}
+            {result.status === "success" && result.data.eventCompleted && (
+              <p className="mt-2 rounded-lg bg-primary/10 p-2 text-sm text-foreground">
+                🏆 ¡Completaste el evento! {result.data.prizeDescription}
+              </p>
+            )}
           </div>
         </>
       )}

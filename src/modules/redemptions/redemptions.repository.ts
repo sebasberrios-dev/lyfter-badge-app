@@ -50,6 +50,12 @@ export class RedemptionRepository implements IRedemptionRepository {
     });
   }
 
+  async countRedeemedInEvent(userId: number, eventId: number): Promise<number> {
+    return prisma.redemption.count({
+      where: { userId, badge: { eventId } },
+    });
+  }
+
   async redeemAtomic(params: RedeemAtomicParams): Promise<RedeemAtomicResult> {
     const { userId, badgeId, eventId, xpValue, isWelcomeBadge, flagged } =
       params;
