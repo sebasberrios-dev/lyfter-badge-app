@@ -17,7 +17,7 @@ export default async function proxy(req: NextRequest) {
     return NextResponse.next();
   }
 
-  // rutas de participante (scan queda afuera hasta que se implemente)
+  // rutas de participante
   if (!session) {
     return NextResponse.redirect(new URL("/login", req.url));
   }
@@ -36,6 +36,7 @@ export const config = {
     "/badges",
     "/leaderboard",
     "/profile",
+    "/scan",
     "/events/:path+",
   ],
 };

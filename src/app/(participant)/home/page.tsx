@@ -45,8 +45,8 @@ export default async function HomePage() {
             <p className="text-sm text-muted-foreground">
               Todavía no te inscribiste a ningún evento.
             </p>
-            <Link href="/events" className={buttonVariants({ variant: "outline", className: "mt-3" })}>
-              Ver eventos
+            <Link href="/scan" className={buttonVariants({ variant: "outline", className: "mt-3" })}>
+              Escanear QR de bienvenida
             </Link>
           </div>
         ) : (

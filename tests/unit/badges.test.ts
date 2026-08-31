@@ -72,18 +72,14 @@ beforeEach(() => {
   vi.resetAllMocks();
 });
 
-// createBadgeSchema exige "icon" como uno de una lista de valores (z.enum([]))
-// que hoy esta vacia ("Iconos por definir" en badges.schema.ts) -- CUALQUIER
-// valor de icon falla la validacion real. Confirmado con un script aparte.
-// Es un bug real preexistente, no algo introducido por estos tests; el
-// usuario confirmo dejarlo como esta y marcar como .todo lo que dependa de
-// pasar esa validacion en createBadgeHandler (updateBadgeHandler no se ve
-// afectado porque .partial() vuelve "icon" opcional).
+// icon usa uno de los 4 valores de BADGE_ICONS (badges.schema.ts), cada uno
+// con su archivo en public/icons/badges/<valor>.svg -- antes esto era un
+// z.enum([]) vacio que rechazaba cualquier valor (bug real, ya corregido).
 const badgeDataForService: any = {
   name: "Badge de prueba",
   description: "Una descripcion con mas de veinte caracteres",
   xpValue: 10,
-  icon: "star",
+  icon: "talk",
   type: "TALK",
   rarity: "COMMON",
 };
@@ -263,12 +259,31 @@ const companyAdminSession = {
 };
 
 describe("badges: createBadgeHandler (action)", () => {
-  it.todo(
-    "happy: SUPER_ADMIN crea el badge (bloqueado por el bug de icon:z.enum([]) en badges.schema.ts -- ver nota arriba)",
-  );
-  it.todo(
-    "logAuditSafe llamado con action:CREATE, entity:BADGE (depende del mismo bloqueo que el caso happy)",
-  );
+  it("happy: SUPER_ADMIN crea el badge y llama logAuditSafe con action:CREATE", async () => {
+    vi.mocked(requireRole).mockResolvedValueOnce(superAdminSession);
+    mockGetEventById.mockResolvedValueOnce({ id: 10, companyId: 5 });
+    vi.mocked(requireCompanyOwnership).mockResolvedValueOnce(superAdminSession);
+    mockBadgeRepo.create.mockResolvedValueOnce({
+      id: 30,
+      ...badgeDataForService,
+      eventId: 10,
+    });
+
+    const result = await createBadgeHandler(10, badgeDataForService);
+
+    expect(result).toEqual({
+      success: true,
+      data: { id: 30, ...badgeDataForService, eventId: 10 },
+    });
+    expect(mockLogAuditSafe).toHaveBeenCalledWith({
+      userId: 1,
+      action: "CREATE",
+      entity: "BADGE",
+      entityId: 30,
+      companyId: 5,
+      eventId: 10,
+    });
+  });
 
   it("unhappy: evento no encontrado -> EventNotFoundError (ocurre antes de validar el body)", async () => {
     vi.mocked(requireRole).mockResolvedValueOnce(superAdminSession);
