@@ -4,14 +4,17 @@ import { ForbiddenError, UnauthenticatedError } from "@/lib/auth-guard";
 import {
   EventNotFoundError,
   EventCannotBeDeletedError,
+  EventAlreadyFinishedError,
   InvalidEventDatesError,
 } from "./events.errors";
 import {
   createEvent,
   getEventById,
   getEventsByField,
+  getAllEventsPaginated,
   updateEvent,
   deleteEvent,
+  finishEvent,
 } from "./events.service";
 import { createEventSchema, updateEventSchema } from "./events.schema";
 import { z } from "zod";
@@ -78,6 +81,35 @@ export async function adminsGetEventsHandler(
       err instanceof ForbiddenError ||
       err instanceof UnauthenticatedError
     ) {
+      return { success: false, error: err.message };
+    }
+
+    console.error(err);
+    return { success: false, error: "error del servidor" };
+  }
+}
+
+export async function adminsGetEventsPaginatedHandler(
+  filters?: EventFilters,
+  page: number = 1,
+  pageSize: number = 20,
+) {
+  try {
+    const session = await requireRole(["SUPER_ADMIN", "COMPANY_ADMIN"]);
+
+    const resolvedCompanyId =
+      (session.role === "SUPER_ADMIN"
+        ? filters?.companyId
+        : session.companyId) ?? undefined;
+
+    const result = await getAllEventsPaginated(
+      { ...filters, companyId: resolvedCompanyId },
+      page,
+      pageSize,
+    );
+    return { success: true, data: result };
+  } catch (err) {
+    if (err instanceof ForbiddenError || err instanceof UnauthenticatedError) {
       return { success: false, error: err.message };
     }
 
@@ -158,6 +190,42 @@ export async function updateEventHandler(
     if (
       err instanceof InvalidEventDatesError ||
       err instanceof EventNotFoundError ||
+      err instanceof ForbiddenError ||
+      err instanceof UnauthenticatedError
+    ) {
+      return { success: false, error: err.message };
+    }
+
+    console.error(err);
+    return { success: false, error: "error del servidor" };
+  }
+}
+
+export async function finishEventHandler(eventId: number) {
+  try {
+    const session = await requireRole(["SUPER_ADMIN", "COMPANY_ADMIN"]);
+
+    const existingEvent = await getEventById(eventId);
+    await requireCompanyOwnership(existingEvent.companyId);
+
+    const finished = await finishEvent(eventId);
+
+    await logAuditSafe({
+      userId: session.userId,
+      action: "UPDATE",
+      entity: "EVENT",
+      entityId: eventId,
+      companyId: existingEvent.companyId,
+      eventId,
+    });
+
+    revalidatePath("/admin/events");
+    revalidatePath(`/admin/events/${eventId}`);
+    return { success: true, data: finished };
+  } catch (err) {
+    if (
+      err instanceof EventNotFoundError ||
+      err instanceof EventAlreadyFinishedError ||
       err instanceof ForbiddenError ||
       err instanceof UnauthenticatedError
     ) {

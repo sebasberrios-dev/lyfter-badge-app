@@ -1,9 +1,14 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { Award } from "lucide-react";
 import { getSession } from "@/lib/auth";
 import { getUserProfile } from "@/modules/users/users.service";
+import { UserNotFoundError } from "@/modules/users/users.errors";
 import { getLevelForXp } from "@/modules/xp-levels/xp-levels.service";
-import { getMyRedemptionsHandler, getMyRegisteredEventsHandler } from "@/modules/redemptions/redemptions.actions";
+import {
+  getMyRedemptionsHandler,
+  getMyRegisteredEventsHandler,
+} from "@/modules/redemptions/redemptions.actions";
 import { XpProgress } from "@/components/participant/xp-progress";
 import { StatCard } from "@/components/participant/stat-card";
 import { EventSummaryCard } from "@/components/participant/event-summary-card";
@@ -13,7 +18,13 @@ export default async function HomePage() {
   const session = await getSession();
   if (!session) return null;
 
-  const profile = await getUserProfile(session.userId);
+  let profile;
+  try {
+    profile = await getUserProfile(session.userId);
+  } catch (err) {
+    if (err instanceof UserNotFoundError) redirect("/login");
+    throw err;
+  }
   const level = getLevelForXp(profile.totalXp);
 
   const [redemptionsResult, eventsResult] = await Promise.all([
@@ -21,14 +32,20 @@ export default async function HomePage() {
     getMyRegisteredEventsHandler(),
   ]);
 
-  const badgeCount = redemptionsResult.success ? redemptionsResult.data?.length ?? 0 : 0;
-  const registrations = eventsResult.success ? eventsResult.data ?? [] : [];
+  const badgeCount = redemptionsResult.success
+    ? (redemptionsResult.data?.length ?? 0)
+    : 0;
+  const registrations = eventsResult.success ? (eventsResult.data ?? []) : [];
 
   return (
     <div className="mx-auto max-w-lg space-y-6 px-4 py-6">
       <div>
-        <h1 className="text-2xl font-bold text-foreground">Hola, {profile.name.split(" ")[0]}</h1>
-        <p className="text-sm text-muted-foreground">Este es tu progreso hasta ahora.</p>
+        <h1 className="text-2xl font-bold text-foreground">
+          Hola, {profile.name.split(" ")[0]}
+        </h1>
+        <p className="text-sm text-muted-foreground">
+          Este es tu progreso hasta ahora.
+        </p>
       </div>
 
       <XpProgress totalXp={profile.totalXp} level={level} />
@@ -45,7 +62,13 @@ export default async function HomePage() {
             <p className="text-sm text-muted-foreground">
               Todavía no te inscribiste a ningún evento.
             </p>
-            <Link href="/scan" className={buttonVariants({ variant: "outline", className: "mt-3" })}>
+            <Link
+              href="/scan"
+              className={buttonVariants({
+                variant: "outline",
+                className: "mt-3",
+              })}
+            >
               Escanear QR de bienvenida
             </Link>
           </div>

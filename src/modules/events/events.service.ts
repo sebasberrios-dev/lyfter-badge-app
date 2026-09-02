@@ -1,4 +1,5 @@
 import {
+  EventAlreadyFinishedError,
   EventCannotBeDeletedError,
   EventNotFoundError,
   InvalidEventDatesError,
@@ -26,6 +27,14 @@ export async function getEventsByField(filters: EventFilters) {
   return eventRepo.findMany(filters);
 }
 
+export async function getAllEventsPaginated(
+  filters: EventFilters,
+  page: number,
+  pageSize: number,
+) {
+  return eventRepo.findManyPaginated(filters, page, pageSize);
+}
+
 export async function createEvent(data: createEventInput, companyId: number) {
   const parsedData = { ...data, companyId };
   const { startDate, endDate } = parsedData;
@@ -51,6 +60,14 @@ export async function updateEvent(eventId: number, data: updateEventInput) {
   }
 
   return eventRepo.update(eventId, data);
+}
+
+export async function finishEvent(eventId: number) {
+  const event = await getEventById(eventId);
+  if (event.status === "FINISHED") {
+    throw new EventAlreadyFinishedError();
+  }
+  return eventRepo.update(eventId, { status: "FINISHED" });
 }
 
 export async function deleteEvent(eventId: number) {

@@ -18,7 +18,7 @@ export async function POST(req: NextRequest) {
   try {
     const user = await login(parsed.data);
 
-    await createSession(user.id, user.role);
+    await createSession(user.id, user.role, user.companyId);
 
     return NextResponse.json({ id: user.id, role: user.role });
   } catch (err) {

@@ -17,3 +17,9 @@ export class EventCannotBeDeletedError extends Error {
     );
   }
 }
+
+export class EventAlreadyFinishedError extends Error {
+  constructor() {
+    super("el evento ya está finalizado");
+  }
+}

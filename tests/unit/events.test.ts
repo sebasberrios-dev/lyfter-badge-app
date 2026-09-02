@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 const mockEventRepo = vi.hoisted(() => ({
   findById: vi.fn(),
   findMany: vi.fn(),
+  findManyPaginated: vi.fn(),
   create: vi.fn(),
   update: vi.fn(),
   delete: vi.fn(),
@@ -40,17 +41,22 @@ import {
   getEventById,
   updateEvent,
   deleteEvent,
+  finishEvent,
+  getAllEventsPaginated,
 } from "@/modules/events/events.service";
 import {
   createEventHandler,
   updateEventHandler,
   deleteEventHandler,
   getEventByIdHandler,
+  finishEventHandler,
+  adminsGetEventsPaginatedHandler,
 } from "@/modules/events/events.actions";
 import {
   EventNotFoundError,
   InvalidEventDatesError,
   EventCannotBeDeletedError,
+  EventAlreadyFinishedError,
 } from "@/modules/events/events.errors";
 import {
   requireAuth,
@@ -398,5 +404,147 @@ describe("events: deleteEventHandler (action)", () => {
 
     expect(result).toEqual({ success: false, error: "usuario no autorizado" });
     expect(mockEventRepo.delete).not.toHaveBeenCalled();
+  });
+});
+
+describe("events: finishEvent (service)", () => {
+  it("happy: pasa el evento a FINISHED", async () => {
+    mockEventRepo.findById.mockResolvedValueOnce({ id: 1, status: "ACTIVE" });
+    mockEventRepo.update.mockResolvedValueOnce({ id: 1, status: "FINISHED" });
+
+    const result = await finishEvent(1);
+
+    expect(result.status).toBe("FINISHED");
+    expect(mockEventRepo.update).toHaveBeenCalledWith(1, { status: "FINISHED" });
+  });
+
+  it("unhappy: evento no encontrado -> EventNotFoundError", async () => {
+    mockEventRepo.findById.mockResolvedValueOnce(null);
+
+    await expect(finishEvent(999)).rejects.toThrow(EventNotFoundError);
+  });
+
+  it("unhappy: evento ya finalizado -> EventAlreadyFinishedError", async () => {
+    mockEventRepo.findById.mockResolvedValueOnce({ id: 1, status: "FINISHED" });
+
+    await expect(finishEvent(1)).rejects.toThrow(EventAlreadyFinishedError);
+    expect(mockEventRepo.update).not.toHaveBeenCalled();
+  });
+});
+
+describe("events: finishEventHandler (action)", () => {
+  it("happy: SUPER_ADMIN finaliza cualquier evento", async () => {
+    vi.mocked(requireRole).mockResolvedValueOnce(superAdminSession);
+    // findById se llama dos veces: una desde el handler (getEventById, para
+    // requireCompanyOwnership) y otra desde dentro de finishEvent (service).
+    mockEventRepo.findById.mockResolvedValue({ id: 1, status: "ACTIVE", companyId: 5 });
+    vi.mocked(requireCompanyOwnership).mockResolvedValueOnce(superAdminSession);
+    mockEventRepo.update.mockResolvedValueOnce({ id: 1, status: "FINISHED", companyId: 5 });
+
+    const result = await finishEventHandler(1);
+
+    expect(result.success).toBe(true);
+    expect(mockLogAuditSafe).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "UPDATE",
+        entity: "EVENT",
+        entityId: 1,
+        companyId: 5,
+        eventId: 1,
+      }),
+    );
+  });
+
+  it("happy: COMPANY_ADMIN finaliza su propio evento", async () => {
+    vi.mocked(requireRole).mockResolvedValueOnce(companyAdminSession);
+    mockEventRepo.findById.mockResolvedValue({ id: 1, status: "ACTIVE", companyId: 5 });
+    vi.mocked(requireCompanyOwnership).mockResolvedValueOnce(companyAdminSession);
+    mockEventRepo.update.mockResolvedValueOnce({ id: 1, status: "FINISHED", companyId: 5 });
+
+    const result = await finishEventHandler(1);
+
+    expect(result.success).toBe(true);
+  });
+
+  it("unhappy: COMPANY_ADMIN de otra empresa -> ForbiddenError", async () => {
+    vi.mocked(requireRole).mockResolvedValueOnce(companyAdminSession);
+    mockEventRepo.findById.mockResolvedValueOnce({ id: 1, status: "ACTIVE", companyId: 99 });
+    vi.mocked(requireCompanyOwnership).mockRejectedValueOnce(
+      new ForbiddenError("usuario no autorizado"),
+    );
+
+    const result = await finishEventHandler(1);
+
+    expect(result).toEqual({ success: false, error: "usuario no autorizado" });
+    expect(mockEventRepo.update).not.toHaveBeenCalled();
+  });
+
+  it("unhappy: evento ya finalizado -> EventAlreadyFinishedError", async () => {
+    vi.mocked(requireRole).mockResolvedValueOnce(superAdminSession);
+    mockEventRepo.findById.mockResolvedValue({ id: 1, status: "FINISHED", companyId: 5 });
+    vi.mocked(requireCompanyOwnership).mockResolvedValueOnce(superAdminSession);
+
+    const result = await finishEventHandler(1);
+
+    expect(result).toEqual({ success: false, error: "el evento ya está finalizado" });
+  });
+});
+
+describe("events: getAllEventsPaginated (service)", () => {
+  it("happy: delega en el repository con paginacion", async () => {
+    mockEventRepo.findManyPaginated.mockResolvedValueOnce({
+      events: [{ id: 1 }],
+      total: 1,
+    });
+
+    const result = await getAllEventsPaginated({}, 1, 20);
+
+    expect(result.total).toBe(1);
+    expect(mockEventRepo.findManyPaginated).toHaveBeenCalledWith({}, 1, 20);
+  });
+});
+
+describe("events: adminsGetEventsPaginatedHandler (action)", () => {
+  it("happy: SUPER_ADMIN puede filtrar por cualquier empresa", async () => {
+    vi.mocked(requireRole).mockResolvedValueOnce(superAdminSession);
+    mockEventRepo.findManyPaginated.mockResolvedValueOnce({
+      events: [{ id: 1, companyId: 7 }],
+      total: 1,
+    });
+
+    const result = await adminsGetEventsPaginatedHandler({ companyId: 7 }, 1, 20);
+
+    expect(result.success).toBe(true);
+    expect(mockEventRepo.findManyPaginated).toHaveBeenCalledWith(
+      { companyId: 7 },
+      1,
+      20,
+    );
+  });
+
+  it("happy: COMPANY_ADMIN queda forzado a su propia empresa", async () => {
+    vi.mocked(requireRole).mockResolvedValueOnce(companyAdminSession);
+    mockEventRepo.findManyPaginated.mockResolvedValueOnce({ events: [], total: 0 });
+
+    await adminsGetEventsPaginatedHandler({ companyId: 99 }, 1, 20);
+
+    expect(mockEventRepo.findManyPaginated).toHaveBeenCalledWith(
+      { companyId: 5 },
+      1,
+      20,
+    );
+  });
+
+  it("unhappy: sin sesion -> {success:false, error}", async () => {
+    vi.mocked(requireRole).mockRejectedValueOnce(
+      new UnauthenticatedError("se requiere iniciar sesión"),
+    );
+
+    const result = await adminsGetEventsPaginatedHandler();
+
+    expect(result).toEqual({
+      success: false,
+      error: "se requiere iniciar sesión",
+    });
   });
 });

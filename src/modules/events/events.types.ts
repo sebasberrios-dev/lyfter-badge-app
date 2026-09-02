@@ -20,8 +20,13 @@ export type EventWithCompany = Prisma.EventGetPayload<{
 export interface IEventRepository {
   findById(id: number): Promise<Event | null>;
   findMany(filters: EventFilters): Promise<EventWithCompany[]>;
+  findManyPaginated(
+    filters: EventFilters,
+    page: number,
+    pageSize: number,
+  ): Promise<{ events: EventWithCompany[]; total: number }>;
   create(data: Prisma.EventUncheckedCreateInput): Promise<Event>;
-  update(id: number, data: updateEventInput): Promise<Event>;
+  update(id: number, data: Prisma.EventUncheckedUpdateInput): Promise<Event>;
   delete(id: number): Promise<Event>;
 }
 

@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { Menu } from "lucide-react";
 import { getSession } from "@/lib/auth";
+import type { SessionPayload } from "@/lib/session.types";
 import { getUserProfile } from "@/modules/users/users.service";
+import { UserNotFoundError } from "@/modules/users/users.errors";
 import { Logo } from "@/components/shared/logo";
 import { UserNavMenu } from "@/components/shared/user-nav-menu";
 import { LogoutButton } from "@/components/shared/logout-button";
@@ -17,11 +19,23 @@ import {
 } from "@/components/ui/sheet";
 import { PUBLIC_NAV_LINKS } from "@/lib/nav-links";
 
+async function resolveSessionUser(session: SessionPayload | null) {
+  if (!session) return null;
+
+  try {
+    return { role: session.role, profile: await getUserProfile(session.userId) };
+  } catch (err) {
+    // Una cookie de sesión firmada puede sobrevivir a que el usuario que
+    // referencia ya no exista (cuenta borrada, reset de DB) -- se trata como
+    // "sin sesión" en vez de tumbar el render de toda la página pública.
+    if (err instanceof UserNotFoundError) return null;
+    throw err;
+  }
+}
+
 export async function PublicNav() {
   const session = await getSession();
-  const sessionUser = session
-    ? { role: session.role, profile: await getUserProfile(session.userId) }
-    : null;
+  const sessionUser = await resolveSessionUser(session);
 
   return (
     <header className="sticky top-0 z-40 border-b border-border bg-card">

@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import {
   EventRegistrationWithEvent,
+  EventRegistrationWithUser,
   IRedemptionRepository,
   RedeemAtomicParams,
   RedeemAtomicResult,
@@ -15,6 +16,7 @@ export class RedemptionRepository implements IRedemptionRepository {
       where: {
         userId: filters.userId,
         badgeId: filters.badgeId,
+        badge: filters.eventId ? { eventId: filters.eventId } : undefined,
         flagged: filters.flagged,
         redeemAt: {
           gte: filters.redeemAtFrom,
@@ -33,6 +35,25 @@ export class RedemptionRepository implements IRedemptionRepository {
       include: { event: true },
       orderBy: { registeredAt: "desc" },
     });
+  }
+
+  async findRegistrationsByEvent(
+    eventId: number,
+  ): Promise<EventRegistrationWithUser[]> {
+    return prisma.eventRegistration.findMany({
+      where: { eventId },
+      include: { user: { select: { id: true, name: true, email: true } } },
+      orderBy: { registeredAt: "desc" },
+    });
+  }
+
+  async countRedeemedByEvent(eventId: number): Promise<Map<number, number>> {
+    const rows = await prisma.redemption.groupBy({
+      by: ["userId"],
+      where: { badge: { eventId } },
+      _count: { _all: true },
+    });
+    return new Map(rows.map((row) => [row.userId, row._count._all]));
   }
 
   async create(

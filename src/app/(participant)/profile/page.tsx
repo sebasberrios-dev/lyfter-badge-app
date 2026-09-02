@@ -1,6 +1,8 @@
+import { redirect } from "next/navigation";
 import { Award, Trophy } from "lucide-react";
 import { getSession } from "@/lib/auth";
 import { getUserProfile } from "@/modules/users/users.service";
+import { UserNotFoundError } from "@/modules/users/users.errors";
 import { getLevelForXp } from "@/modules/xp-levels/xp-levels.service";
 import { getMyGlobalRankHandler } from "@/modules/leaderboard/leaderboard.actions";
 import { getMyRedemptionsHandler } from "@/modules/redemptions/redemptions.actions";
@@ -12,7 +14,13 @@ export default async function ProfilePage() {
   const session = await getSession();
   if (!session) return null;
 
-  const profile = await getUserProfile(session.userId);
+  let profile;
+  try {
+    profile = await getUserProfile(session.userId);
+  } catch (err) {
+    if (err instanceof UserNotFoundError) redirect("/login");
+    throw err;
+  }
   const level = getLevelForXp(profile.totalXp);
 
   const [redemptionsResult, rankResult] = await Promise.all([

@@ -6,6 +6,7 @@ import { getEventById } from "../events/events.service";
 import { getLevelForXp, didLevelUp } from "../xp-levels/xp-levels.service";
 import { LevelInfo } from "../xp-levels/xp-levels.types";
 import { RedemptionRepository } from "./redemptions.repository";
+import { EventParticipant } from "./redemptions.types";
 import {
   BadgeDoesNotMatchEventError,
   EventAlreadyEndedError,
@@ -154,4 +155,84 @@ export async function getMyRedemptions(userId: number) {
 
 export async function getUserRegisteredEvents(userId: number) {
   return redemptionRepo.findRegistrationsByUser(userId);
+}
+
+export async function getEventParticipants(
+  eventId: number,
+): Promise<EventParticipant[]> {
+  const [registrations, redeemedCounts, totalBadges] = await Promise.all([
+    redemptionRepo.findRegistrationsByEvent(eventId),
+    redemptionRepo.countRedeemedByEvent(eventId),
+    getBadgesByField({ eventId }),
+  ]);
+
+  return registrations.map((registration) => ({
+    userId: registration.user.id,
+    name: registration.user.name,
+    email: registration.user.email,
+    registeredAt: registration.registeredAt,
+    eventXp: registration.eventXp,
+    redeemedCount: redeemedCounts.get(registration.user.id) ?? 0,
+    totalBadges: totalBadges.length,
+  }));
+}
+
+export type EventMetrics = {
+  participantsCount: number;
+  avgCompletionPct: number;
+  flaggedRedemptionsCount: number;
+  badgesRedeemedByType: {
+    id: number;
+    name: string;
+    type: BadgeType;
+    rarity: BadgeRarity;
+    count: number;
+  }[];
+};
+
+export async function getEventMetrics(eventId: number): Promise<EventMetrics> {
+  const [participants, totalBadges, eventRedemptions] = await Promise.all([
+    getEventParticipants(eventId),
+    getBadgesByField({ eventId }),
+    redemptionRepo.findMany({ eventId }),
+  ]);
+
+  const participantsCount = participants.length;
+  const avgCompletionPct =
+    totalBadges.length === 0 || participantsCount === 0
+      ? 0
+      : Math.round(
+          (participants.reduce((sum, p) => sum + p.redeemedCount, 0) /
+            (participantsCount * totalBadges.length)) *
+            100,
+        );
+
+  const flaggedRedemptionsCount = eventRedemptions.filter(
+    (redemption) => redemption.flagged,
+  ).length;
+
+  const countsByBadge = new Map<number, number>();
+  for (const redemption of eventRedemptions) {
+    countsByBadge.set(
+      redemption.badgeId,
+      (countsByBadge.get(redemption.badgeId) ?? 0) + 1,
+    );
+  }
+
+  const badgesRedeemedByType = totalBadges
+    .map((badge) => ({
+      id: badge.id,
+      name: badge.name,
+      type: badge.type,
+      rarity: badge.rarity,
+      count: countsByBadge.get(badge.id) ?? 0,
+    }))
+    .sort((a, b) => b.count - a.count);
+
+  return {
+    participantsCount,
+    avgCompletionPct,
+    flaggedRedemptionsCount,
+    badgesRedeemedByType,
+  };
 }

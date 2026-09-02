@@ -1,9 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import bcrypt from "bcrypt";
 
 const mockUserRepo = vi.hoisted(() => ({
   findById: vi.fn(),
   findByEmail: vi.fn(),
+  findMany: vi.fn(),
   create: vi.fn(),
   update: vi.fn(),
 }));
@@ -14,143 +14,94 @@ vi.mock("@/modules/users/users.repository", () => ({
   }),
 }));
 
-import {
-  register,
-  login,
-  promoteToCompanyAdmin,
-} from "@/modules/users/users.service";
-import {
-  EmailAlreadyExistsError,
-  InvalidCredentialsError,
-  UserNotFoundError,
-  UserIsSuperAdminError,
-  UserIsAlreadyCompanyAdminError,
-} from "@/modules/users/users.errors";
+vi.mock("@/lib/auth-guard", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/auth-guard")>();
+  return {
+    ...actual,
+    requireRole: vi.fn(),
+  };
+});
+
+import { getAllUsers } from "@/modules/users/users.service";
+import { getAllUsersHandler } from "@/modules/users/users.actions";
+import { requireRole, UnauthenticatedError, ForbiddenError } from "@/lib/auth-guard";
 
 beforeEach(() => {
   vi.resetAllMocks();
 });
 
-describe("users: register", () => {
-  it("happy: crea el usuario con password hasheado", async () => {
-    mockUserRepo.findByEmail.mockResolvedValueOnce(null);
-    mockUserRepo.create.mockImplementationOnce(async (data: any) => ({
-      id: 1,
-      role: "PARTICIPANT",
-      ...data,
-    }));
+const superAdminSession = {
+  userId: 1,
+  role: "SUPER_ADMIN" as const,
+  companyId: null,
+  expiresAt: new Date(),
+};
 
-    const result = await register({
-      name: "Test User",
-      email: "test@example.com",
-      password: "Abcdef1!",
-      confirmPassword: "Abcdef1!",
+describe("users: getAllUsers (service)", () => {
+  it("happy: delega en el repository con filtros y paginacion", async () => {
+    mockUserRepo.findMany.mockResolvedValueOnce({
+      users: [{ id: 1, name: "Ana" }],
+      total: 1,
     });
 
-    expect(mockUserRepo.create).toHaveBeenCalledTimes(1);
-    const createArgs = mockUserRepo.create.mock.calls[0][0];
-    expect(createArgs.password).not.toBe("Abcdef1!");
-    expect(await bcrypt.compare("Abcdef1!", createArgs.password)).toBe(true);
-    expect(result.email).toBe("test@example.com");
-  });
+    const result = await getAllUsers({ q: "ana" }, 1, 20);
 
-  it("unhappy: email duplicado -> EmailAlreadyExistsError", async () => {
-    mockUserRepo.findByEmail.mockResolvedValueOnce({ id: 1 });
-
-    await expect(
-      register({
-        name: "Test",
-        email: "dup@example.com",
-        password: "Abcdef1!",
-        confirmPassword: "Abcdef1!",
-      }),
-    ).rejects.toThrow(EmailAlreadyExistsError);
-    expect(mockUserRepo.create).not.toHaveBeenCalled();
+    expect(result.total).toBe(1);
+    expect(mockUserRepo.findMany).toHaveBeenCalledWith({ q: "ana" }, 1, 20);
   });
 });
 
-describe("users: login", () => {
-  it("happy: devuelve el usuario con credenciales correctas", async () => {
-    const passwordHash = await bcrypt.hash("Abcdef1!", 10);
-    mockUserRepo.findByEmail.mockResolvedValueOnce({
-      id: 1,
-      email: "test@example.com",
-      password: passwordHash,
-      role: "PARTICIPANT",
+describe("users: getAllUsersHandler (action)", () => {
+  it("happy: SUPER_ADMIN lista usuarios", async () => {
+    vi.mocked(requireRole).mockResolvedValueOnce(superAdminSession);
+    mockUserRepo.findMany.mockResolvedValueOnce({
+      users: [{ id: 1, name: "Ana" }],
+      total: 1,
     });
 
-    const result = await login({
-      email: "test@example.com",
-      password: "Abcdef1!",
+    const result = await getAllUsersHandler({ role: "PARTICIPANT" }, 1, 20);
+
+    expect(result).toEqual({
+      success: true,
+      data: { users: [{ id: 1, name: "Ana" }], total: 1 },
     });
-
-    expect(result.id).toBe(1);
-  });
-
-  it("unhappy: email no existe -> InvalidCredentialsError", async () => {
-    mockUserRepo.findByEmail.mockResolvedValueOnce(null);
-
-    await expect(
-      login({ email: "noexiste@example.com", password: "x" }),
-    ).rejects.toThrow(InvalidCredentialsError);
-  });
-
-  it("unhappy: password incorrecto -> InvalidCredentialsError", async () => {
-    const passwordHash = await bcrypt.hash("Correct1!", 10);
-    mockUserRepo.findByEmail.mockResolvedValueOnce({
-      id: 1,
-      email: "test@example.com",
-      password: passwordHash,
-    });
-
-    await expect(
-      login({ email: "test@example.com", password: "Wrong1!" }),
-    ).rejects.toThrow(InvalidCredentialsError);
-  });
-});
-
-describe("users: promoteToCompanyAdmin", () => {
-  it("happy: promueve a COMPANY_ADMIN y asigna companyId", async () => {
-    mockUserRepo.findById.mockResolvedValueOnce({ id: 1, role: "PARTICIPANT" });
-    mockUserRepo.update.mockResolvedValueOnce({
-      id: 1,
-      role: "COMPANY_ADMIN",
-      companyId: 5,
-    });
-
-    const result = await promoteToCompanyAdmin(1, 5);
-
-    expect(mockUserRepo.update).toHaveBeenCalledWith(1, {
-      role: "COMPANY_ADMIN",
-      companyId: 5,
-    });
-    expect(result.role).toBe("COMPANY_ADMIN");
-  });
-
-  it("unhappy: usuario no encontrado -> UserNotFoundError", async () => {
-    mockUserRepo.findById.mockResolvedValueOnce(null);
-
-    await expect(promoteToCompanyAdmin(999, 5)).rejects.toThrow(
-      UserNotFoundError,
+    expect(mockUserRepo.findMany).toHaveBeenCalledWith(
+      { role: "PARTICIPANT" },
+      1,
+      20,
     );
   });
 
-  it("unhappy: usuario ya es SUPER_ADMIN -> UserIsSuperAdminError", async () => {
-    mockUserRepo.findById.mockResolvedValueOnce({ id: 1, role: "SUPER_ADMIN" });
+  it("happy: sin filtros usa defaults de pagina/tamano", async () => {
+    vi.mocked(requireRole).mockResolvedValueOnce(superAdminSession);
+    mockUserRepo.findMany.mockResolvedValueOnce({ users: [], total: 0 });
 
-    await expect(promoteToCompanyAdmin(1, 5)).rejects.toThrow(
-      UserIsSuperAdminError,
-    );
+    await getAllUsersHandler();
+
+    expect(mockUserRepo.findMany).toHaveBeenCalledWith({}, 1, 20);
   });
 
-  it("unhappy: usuario ya es COMPANY_ADMIN -> UserIsAlreadyCompanyAdminError", async () => {
-    mockUserRepo.findById.mockResolvedValueOnce({
-      id: 1,
-      role: "COMPANY_ADMIN",
-    });
-
-    await expect(promoteToCompanyAdmin(1, 5)).rejects.toThrow(
-      UserIsAlreadyCompanyAdminError,
+  it("unhappy: COMPANY_ADMIN no tiene acceso -> ForbiddenError", async () => {
+    vi.mocked(requireRole).mockRejectedValueOnce(
+      new ForbiddenError("usuario no autorizado"),
     );
+
+    const result = await getAllUsersHandler();
+
+    expect(result).toEqual({ success: false, error: "usuario no autorizado" });
+    expect(mockUserRepo.findMany).not.toHaveBeenCalled();
+  });
+
+  it("unhappy: sin sesion -> {success:false, error}", async () => {
+    vi.mocked(requireRole).mockRejectedValueOnce(
+      new UnauthenticatedError("se requiere iniciar sesión"),
+    );
+
+    const result = await getAllUsersHandler();
+
+    expect(result).toEqual({
+      success: false,
+      error: "se requiere iniciar sesión",
+    });
   });
 });

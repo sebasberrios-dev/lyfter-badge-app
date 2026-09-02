@@ -5,6 +5,8 @@ const mockRedemptionRepo = vi.hoisted(() => ({
   create: vi.fn(),
   findRegistration: vi.fn(),
   findRegistrationsByUser: vi.fn(),
+  findRegistrationsByEvent: vi.fn(),
+  countRedeemedByEvent: vi.fn(),
   redeemAtomic: vi.fn(),
   countRedeemedInEvent: vi.fn(),
 }));
@@ -33,6 +35,8 @@ vi.mock("@/lib/auth-guard", async (importOriginal) => {
   return {
     ...actual,
     requireAuth: vi.fn(),
+    requireRole: vi.fn(),
+    requireCompanyOwnership: vi.fn(),
   };
 });
 
@@ -44,10 +48,14 @@ import {
   redeemBadge,
   getMyRedemptions,
   getUserRegisteredEvents,
+  getEventParticipants,
+  getEventMetrics,
 } from "@/modules/redemptions/redemptions.service";
 import {
   getMyRedemptionsHandler,
   getMyRegisteredEventsHandler,
+  adminsGetEventParticipantsHandler,
+  adminsGetEventMetricsHandler,
 } from "@/modules/redemptions/redemptions.actions";
 import {
   InvalidTokenError,
@@ -57,7 +65,14 @@ import {
   EventAlreadyEndedError,
   UserNotRegisteredToEventError,
 } from "@/modules/redemptions/redemptions.errors";
-import { requireAuth, UnauthenticatedError } from "@/lib/auth-guard";
+import { EventNotFoundError } from "@/modules/events/events.errors";
+import {
+  requireAuth,
+  requireRole,
+  requireCompanyOwnership,
+  UnauthenticatedError,
+  ForbiddenError,
+} from "@/lib/auth-guard";
 
 beforeEach(() => {
   vi.resetAllMocks();
@@ -479,6 +494,20 @@ const participantSession = {
   expiresAt: new Date(),
 };
 
+const superAdminSession = {
+  userId: 9,
+  role: "SUPER_ADMIN" as const,
+  companyId: null,
+  expiresAt: new Date(),
+};
+
+const companyAdminSession = {
+  userId: 8,
+  role: "COMPANY_ADMIN" as const,
+  companyId: 5,
+  expiresAt: new Date(),
+};
+
 describe("redemptions: getMyRedemptions / getUserRegisteredEvents (service)", () => {
   it("getMyRedemptions pasa el userId como filtro al repository", async () => {
     mockRedemptionRepo.findMany.mockResolvedValueOnce([{ id: 1 }]);
@@ -539,6 +568,159 @@ describe("redemptions: getMyRedemptionsHandler / getMyRegisteredEventsHandler (a
     );
 
     const result = await getMyRegisteredEventsHandler();
+
+    expect(result).toEqual({
+      success: false,
+      error: "se requiere iniciar sesión",
+    });
+  });
+});
+
+describe("redemptions: getEventParticipants (service)", () => {
+  it("combina inscripciones, conteo de canjes y total de badges del evento", async () => {
+    mockRedemptionRepo.findRegistrationsByEvent.mockResolvedValueOnce([
+      {
+        user: { id: 1, name: "Ana", email: "ana@example.com" },
+        registeredAt: new Date("2026-01-01"),
+        eventXp: 30,
+      },
+      {
+        user: { id: 2, name: "Beto", email: "beto@example.com" },
+        registeredAt: new Date("2026-01-02"),
+        eventXp: 10,
+      },
+    ]);
+    mockRedemptionRepo.countRedeemedByEvent.mockResolvedValueOnce(
+      new Map([[1, 2]]),
+    );
+    mockGetBadgesByField.mockResolvedValueOnce([{ id: 1 }, { id: 2 }]);
+
+    const result = await getEventParticipants(100);
+
+    expect(result).toEqual([
+      {
+        userId: 1,
+        name: "Ana",
+        email: "ana@example.com",
+        registeredAt: new Date("2026-01-01"),
+        eventXp: 30,
+        redeemedCount: 2,
+        totalBadges: 2,
+      },
+      {
+        userId: 2,
+        name: "Beto",
+        email: "beto@example.com",
+        registeredAt: new Date("2026-01-02"),
+        eventXp: 10,
+        redeemedCount: 0,
+        totalBadges: 2,
+      },
+    ]);
+  });
+});
+
+describe("redemptions: adminsGetEventParticipantsHandler (action)", () => {
+  it("happy: SUPER_ADMIN puede ver participantes de cualquier evento", async () => {
+    vi.mocked(requireRole).mockResolvedValueOnce(superAdminSession);
+    mockGetEventById.mockResolvedValueOnce({ id: 100, companyId: 5 });
+    vi.mocked(requireCompanyOwnership).mockResolvedValueOnce(superAdminSession);
+    mockRedemptionRepo.findRegistrationsByEvent.mockResolvedValueOnce([]);
+    mockRedemptionRepo.countRedeemedByEvent.mockResolvedValueOnce(new Map());
+
+    const result = await adminsGetEventParticipantsHandler(100);
+
+    expect(result).toEqual({ success: true, data: [] });
+  });
+
+  it("unhappy: COMPANY_ADMIN de otra empresa -> ForbiddenError", async () => {
+    vi.mocked(requireRole).mockResolvedValueOnce(companyAdminSession);
+    mockGetEventById.mockResolvedValueOnce({ id: 100, companyId: 99 });
+    vi.mocked(requireCompanyOwnership).mockRejectedValueOnce(
+      new ForbiddenError("usuario no autorizado"),
+    );
+
+    const result = await adminsGetEventParticipantsHandler(100);
+
+    expect(result).toEqual({ success: false, error: "usuario no autorizado" });
+  });
+
+  it("unhappy: evento inexistente -> EventNotFoundError", async () => {
+    vi.mocked(requireRole).mockResolvedValueOnce(superAdminSession);
+    mockGetEventById.mockRejectedValueOnce(new EventNotFoundError());
+
+    const result = await adminsGetEventParticipantsHandler(999);
+
+    expect(result).toEqual({ success: false, error: "evento no encontrado" });
+  });
+});
+
+describe("redemptions: getEventMetrics (service)", () => {
+  it("calcula participantes, completitud promedio, flagged y ranking de badges", async () => {
+    mockRedemptionRepo.findRegistrationsByEvent.mockResolvedValueOnce([
+      {
+        user: { id: 1, name: "Ana", email: "ana@example.com" },
+        registeredAt: new Date(),
+        eventXp: 30,
+      },
+    ]);
+    mockRedemptionRepo.countRedeemedByEvent.mockResolvedValueOnce(
+      new Map([[1, 1]]),
+    );
+    mockGetBadgesByField.mockResolvedValue([
+      { id: 1, name: "Bienvenida", type: "WELCOME", rarity: "COMMON" },
+      { id: 2, name: "Charla X", type: "TALK", rarity: "RARE" },
+    ]);
+    mockRedemptionRepo.findMany.mockResolvedValueOnce([
+      { badgeId: 1, flagged: false },
+      { badgeId: 1, flagged: true },
+    ]);
+
+    const result = await getEventMetrics(100);
+
+    expect(result.participantsCount).toBe(1);
+    expect(result.avgCompletionPct).toBe(50);
+    expect(result.flaggedRedemptionsCount).toBe(1);
+    expect(result.badgesRedeemedByType).toEqual([
+      { id: 1, name: "Bienvenida", type: "WELCOME", rarity: "COMMON", count: 2 },
+      { id: 2, name: "Charla X", type: "TALK", rarity: "RARE", count: 0 },
+    ]);
+  });
+
+  it("evento sin badges ni participantes -> avgCompletionPct:0, sin division por cero", async () => {
+    mockRedemptionRepo.findRegistrationsByEvent.mockResolvedValueOnce([]);
+    mockRedemptionRepo.countRedeemedByEvent.mockResolvedValueOnce(new Map());
+    mockGetBadgesByField.mockResolvedValue([]);
+    mockRedemptionRepo.findMany.mockResolvedValueOnce([]);
+
+    const result = await getEventMetrics(100);
+
+    expect(result.avgCompletionPct).toBe(0);
+    expect(result.participantsCount).toBe(0);
+  });
+});
+
+describe("redemptions: adminsGetEventMetricsHandler (action)", () => {
+  it("happy: COMPANY_ADMIN ve las metricas de su propio evento", async () => {
+    vi.mocked(requireRole).mockResolvedValueOnce(companyAdminSession);
+    mockGetEventById.mockResolvedValueOnce({ id: 100, companyId: 5 });
+    vi.mocked(requireCompanyOwnership).mockResolvedValueOnce(companyAdminSession);
+    mockRedemptionRepo.findRegistrationsByEvent.mockResolvedValueOnce([]);
+    mockRedemptionRepo.countRedeemedByEvent.mockResolvedValueOnce(new Map());
+    mockGetBadgesByField.mockResolvedValue([]);
+    mockRedemptionRepo.findMany.mockResolvedValueOnce([]);
+
+    const result = await adminsGetEventMetricsHandler(100);
+
+    expect(result.success).toBe(true);
+  });
+
+  it("unhappy: sin sesion -> {success:false, error}", async () => {
+    vi.mocked(requireRole).mockRejectedValueOnce(
+      new UnauthenticatedError("se requiere iniciar sesión"),
+    );
+
+    const result = await adminsGetEventMetricsHandler(100);
 
     expect(result).toEqual({
       success: false,

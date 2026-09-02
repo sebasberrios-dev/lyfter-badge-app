@@ -1,11 +1,12 @@
-import { createCompanyInput } from "./companies.types";
+import { CompanyFilters, createCompanyInput, updateCompanyInput } from "./companies.types";
 import { CompanyRepository } from "./companies.repository";
 import {
   CompanyAlreadyExistsError,
+  CompanyCannotBeDeletedError,
   CompanyNotFoundError,
 } from "./companies.errors";
 import { promoteToCompanyAdmin } from "../users/users.service";
-import { User } from "@prisma/client";
+import { Prisma, User } from "@prisma/client";
 
 const companyRepo = new CompanyRepository();
 
@@ -50,4 +51,41 @@ export async function assignAdmin(userId: number, companyId: number) {
   await getCompanyById(companyId);
 
   return promoteToCompanyAdmin(userId, companyId);
+}
+
+export async function getAllCompanies(
+  filters: CompanyFilters,
+  page: number,
+  pageSize: number,
+) {
+  return companyRepo.findMany(filters, page, pageSize);
+}
+
+export async function updateCompany(companyId: number, data: updateCompanyInput) {
+  await getCompanyById(companyId);
+
+  if (data.name) {
+    const existing = await companyRepo.findByName(data.name);
+    if (existing && existing.id !== companyId) {
+      throw new CompanyAlreadyExistsError();
+    }
+  }
+
+  return companyRepo.update(companyId, data);
+}
+
+export async function deleteCompany(companyId: number) {
+  await getCompanyById(companyId);
+
+  try {
+    return await companyRepo.delete(companyId);
+  } catch (err) {
+    if (
+      err instanceof Prisma.PrismaClientKnownRequestError &&
+      err.code === "P2039"
+    ) {
+      throw new CompanyCannotBeDeletedError();
+    }
+    throw err;
+  }
 }

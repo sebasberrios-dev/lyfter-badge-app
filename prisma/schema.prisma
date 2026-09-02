@@ -47,7 +47,8 @@ model User {
   companyId Int?
   company   Company? @relation(fields: [companyId], references: [id], onDelete: SetNull)
 
-  totalXp Int @default(0)
+  totalXp  Int     @default(0)
+  isActive Boolean @default(true)
 
   registrations EventRegistration[]
   redemptions   Redemption[]

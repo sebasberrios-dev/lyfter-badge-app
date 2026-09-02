@@ -1,5 +1,9 @@
 import { UserRepository } from "./users.repository";
-import type { PublicLoginInput, PublicRegisterInput } from "./users.types";
+import type {
+  PublicLoginInput,
+  PublicRegisterInput,
+  UserFilters,
+} from "./users.types";
 import {
   EmailAlreadyExistsError,
   InvalidCredentialsError,
@@ -52,6 +56,23 @@ export async function getUserProfile(
 
   const { password: _password, ...profile } = user;
   return profile;
+}
+
+export async function getUserByEmail(email: string) {
+  const user = await userRepo.findByEmail(email);
+  if (!user) {
+    throw new UserNotFoundError();
+  }
+
+  return user;
+}
+
+export async function getAllUsers(
+  filters: UserFilters,
+  page: number,
+  pageSize: number,
+) {
+  return userRepo.findMany(filters, page, pageSize);
 }
 
 export async function promoteToCompanyAdmin(userId: number, companyId: number) {
