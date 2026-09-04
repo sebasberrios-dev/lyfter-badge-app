@@ -64,6 +64,7 @@ model Company {
   users User[]
   events    Event[]
   auditLogs AuditLog[]
+  dashboardSnapshots DashboardSnapshot[]
 }
 
 model Event {
@@ -160,5 +161,20 @@ model AuditLog {
   @@index([companyId])
   @@index([eventId])
   @@index([createdAt])
+}
+
+model DashboardSnapshot {
+  id Int @id @default(autoincrement())
+
+  companyId Int?
+  company   Company? @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  date                  DateTime
+  attendeesCount        Int
+  totalRedemptionsCount Int @default(0)
+
+  createdAt DateTime @default(now())
+
+  @@index([companyId, date])
 }
 

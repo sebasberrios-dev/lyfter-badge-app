@@ -4,8 +4,11 @@ import { adminsGetEventsHandler } from "@/modules/events/events.actions";
 import { adminsGetEventMetricsHandler } from "@/modules/redemptions/redemptions.actions";
 import { EventSubNav } from "@/components/admin/events/event-sub-nav";
 import { Card, CardContent } from "@/components/ui/card";
-import { RARITY_STYLES } from "@/lib/badge-display";
 import { cn } from "@/lib/utils";
+
+// Mismo ciclo de color que el dashboard admin: sage / sky / lilac por fila,
+// no por rareza del badge (RARITY_STYLES es para pills de texto, no barras sólidas).
+const TOP_BADGE_BAR_COLORS = ["bg-sage", "bg-sky", "bg-lilac"];
 
 export default async function AdminEventMetricsPage({
   params,
@@ -82,42 +85,42 @@ export default async function AdminEventMetricsPage({
         </Card>
       </div>
 
-      <div className="space-y-3">
-        <h3 className="text-sm font-semibold text-foreground">
-          Badges más canjeados
-        </h3>
-        {metrics.badgesRedeemedByType.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            Este evento todavía no tiene badges.
-          </p>
-        ) : maxCount === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            Todavía no hay canjes registrados.
-          </p>
-        ) : (
-          <div className="space-y-2">
-            {metrics.badgesRedeemedByType.map((badge) => (
-              <div key={badge.id} className="flex items-center gap-3">
-                <span className="w-32 shrink-0 truncate text-sm text-foreground">
-                  {badge.name}
-                </span>
-                <div className="h-3 flex-1 overflow-hidden rounded-full bg-muted">
-                  <div
-                    className={cn(
-                      "h-full rounded-full",
-                      RARITY_STYLES[badge.rarity],
-                    )}
-                    style={{ width: `${(badge.count / maxCount) * 100}%` }}
-                  />
+      <Card className="[--card-spacing:--spacing(6)]">
+        <CardContent className="space-y-6">
+          <h3 className="text-sm font-bold text-foreground">Más visitados</h3>
+          {metrics.badgesRedeemedByType.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              Este evento todavía no tiene badges.
+            </p>
+          ) : maxCount === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              Todavía no hay canjes registrados.
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {metrics.badgesRedeemedByType.map((badge, index) => (
+                <div key={badge.id} className="flex items-center gap-3">
+                  <span className="w-32 shrink-0 truncate text-sm text-foreground">
+                    {badge.name}
+                  </span>
+                  <div className="h-3 flex-1 overflow-hidden rounded-full bg-muted">
+                    <div
+                      className={cn(
+                        "h-full rounded-full",
+                        TOP_BADGE_BAR_COLORS[index % 3],
+                      )}
+                      style={{ width: `${(badge.count / maxCount) * 100}%` }}
+                    />
+                  </div>
+                  <span className="w-8 shrink-0 text-right text-sm text-muted-foreground">
+                    {badge.count}
+                  </span>
                 </div>
-                <span className="w-8 shrink-0 text-right text-sm text-muted-foreground">
-                  {badge.count}
-                </span>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

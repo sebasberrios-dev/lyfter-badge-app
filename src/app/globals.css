@@ -9,6 +9,8 @@
   --color-lilac: #d798e7; /* Acento creativo, elementos secundarios */
   --color-peach: #ffcc8b; /* Acento cálido, fondos suaves */
   --color-ink: #2d323d; /* Texto principal y fondos oscuros */
+  --color-success: #34c759; /* Tendencia positiva (dashboard admin) */
+  --color-danger: #ff3b30; /* Tendencia negativa (dashboard admin) */
 }
 
 /* Tema oscuro como base — coincide con los wireframes de referencia */
