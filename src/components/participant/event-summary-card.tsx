@@ -25,7 +25,7 @@ type EventSummaryCardProps = {
 
 export function EventSummaryCard({ event, eventXp }: EventSummaryCardProps) {
   return (
-    <Link href={`/events/${event.id}`}>
+    <Link href={`/events/${event.id}`} className="block">
       <Card className="transition-colors hover:bg-muted/50">
         <CardContent className="flex flex-col gap-2">
           <div className="flex items-start justify-between gap-2">

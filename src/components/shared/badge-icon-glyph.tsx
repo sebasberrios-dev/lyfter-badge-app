@@ -6,9 +6,10 @@ type BadgeIconGlyphProps = {
   icon: string;
   rarity: BadgeRarity;
   className?: string;
+  iconClassName?: string;
 };
 
-export function BadgeIconGlyph({ icon, rarity, className }: BadgeIconGlyphProps) {
+export function BadgeIconGlyph({ icon, rarity, className, iconClassName }: BadgeIconGlyphProps) {
   return (
     <span
       className={cn(
@@ -19,7 +20,7 @@ export function BadgeIconGlyph({ icon, rarity, className }: BadgeIconGlyphProps)
     >
       <span
         aria-hidden
-        className="block size-6 bg-current"
+        className={cn("block size-6 bg-current", iconClassName)}
         style={{
           maskImage: `url(/icons/badges/${icon}.svg)`,
           WebkitMaskImage: `url(/icons/badges/${icon}.svg)`,

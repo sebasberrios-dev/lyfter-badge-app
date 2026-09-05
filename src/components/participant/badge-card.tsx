@@ -1,6 +1,7 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge as UiBadge } from "@/components/ui/badge";
 import { BadgeIconGlyph } from "@/components/shared/badge-icon-glyph";
+import { ShareBadgeButtons } from "@/components/shared/share-badge-buttons";
 import { cn } from "@/lib/utils";
 import { TYPE_LABELS, RARITY_LABELS } from "@/lib/badge-display";
 import type { PublicBadgeSummary } from "@/modules/badges/badges.actions";
@@ -27,6 +28,9 @@ export function BadgeCard({ badge, redeemed = true }: BadgeCardProps) {
           <span aria-hidden>·</span>
           <span>{RARITY_LABELS[badge.rarity]}</span>
         </div>
+        {redeemed && (
+          <ShareBadgeButtons badgeId={badge.id} badgeName={badge.name} size="sm" />
+        )}
       </CardContent>
     </Card>
   );

@@ -4,6 +4,7 @@ import {
   IBadgeRepository,
   updateBadgeInput,
   BadgeWithCompany,
+  BadgePublicSelect,
 } from "./badges.types";
 import { prisma } from "@/lib/prisma";
 
@@ -12,6 +13,22 @@ export class BadgeRepository implements IBadgeRepository {
     return prisma.badge.findUnique({
       where: { id },
       include: { event: { select: { companyId: true } } },
+    });
+  }
+
+  async findByIdWithEventAndCompany(id: number): Promise<BadgePublicSelect | null> {
+    return prisma.badge.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        name: true,
+        description: true,
+        xpValue: true,
+        icon: true,
+        type: true,
+        rarity: true,
+        event: { select: { name: true, company: { select: { name: true } } } },
+      },
     });
   }
 

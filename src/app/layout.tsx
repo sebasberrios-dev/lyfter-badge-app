@@ -6,6 +6,7 @@ import "./globals.css";
 const geist = Geist({ subsets: ["latin"], variable: "--font-sans" });
 
 export const metadata: Metadata = {
+  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"),
   title: "Lyfter Badge App",
   description:
     "Gamificá tus eventos: escaneá QRs, coleccioná badges y subí de nivel en cada charla.",

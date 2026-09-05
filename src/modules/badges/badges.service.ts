@@ -1,4 +1,5 @@
 import { Prisma } from "@prisma/client";
+import { cache } from "react";
 import {
   BadgeCannotBeDeletedError,
   BadgeNotFoundError,
@@ -9,10 +10,34 @@ import {
   BadgeFilters,
   createBadgeInput,
   updateBadgeInput,
+  PublicBadgeDetail,
 } from "./badges.types";
 import generateQrToken from "@/lib/qrToken";
 
 const badgeRepo = new BadgeRepository();
+
+// Vista pública de un badge (sin qrToken), usada por la página de compartir
+// y la imagen OG. cache() evita una segunda consulta cuando generateMetadata
+// y el componente de página piden el mismo badge en el mismo request.
+export const getPublicBadge = cache(
+  async (badgeId: number): Promise<PublicBadgeDetail> => {
+    const badge = await badgeRepo.findByIdWithEventAndCompany(badgeId);
+    if (!badge) {
+      throw new BadgeNotFoundError();
+    }
+    return {
+      id: badge.id,
+      name: badge.name,
+      description: badge.description,
+      xpValue: badge.xpValue,
+      icon: badge.icon,
+      type: badge.type,
+      rarity: badge.rarity,
+      eventName: badge.event.name,
+      companyName: badge.event.company.name,
+    };
+  },
+);
 
 export async function getAllBadges() {
   return await badgeRepo.findMany({});

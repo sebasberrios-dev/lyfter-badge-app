@@ -4,7 +4,7 @@ Plataforma de gamificación de eventos para Lyfter. Resuelve un problema real: h
 
 ## Demo en producción
 
-`[pendiente — se agrega el link tras el deploy en Vercel]`
+[https://lyfter-badge-app.vercel.app](https://lyfter-badge-app.vercel.app)
 
 ## Cómo funciona
 
@@ -41,7 +41,7 @@ Plataforma de gamificación de eventos para Lyfter. Resuelve un problema real: h
 | Formularios               | **React Hook Form**                                 | Estándar en los paneles de admin.                                                      |
 | QR                        | `qrcode` + `jose` (token rotativo firmado)          | Antifraude — ver más abajo.                                                            |
 | Escaneo de QR             | `@zxing/browser`                                    | Lectura de cámara en el navegador.                                                     |
-| Imagen dinámica de badges | `@vercel/og` (Satori, Edge Runtime)                 | `og:image` para compartir en redes.                                                    |
+| Imagen dinámica de badges | `next/og` (Satori)                                  | `og:image` para compartir en redes.                                                    |
 | Testing                   | **Vitest**                                          | 209 tests, mockeado, sin tocar la DB real.                                             |
 | Deploy                    | **Vercel**                                          | Requisito de la actividad.                                                             |
 
@@ -132,7 +132,7 @@ cd lyfter-badge-app
 npm install
 ```
 
-Copiar `.env.example` a `.env` y completar las 4 variables (`DATABASE_URL`/`DIRECT_URL` de tu base de Neon, y dos secretos cualquiera para `SESSION_SECRET`/`QR_TOKEN_SECRET` — deben ser distintos entre sí, para que comprometer uno no comprometa el otro):
+Copiar `.env.example` a `.env` y completar las variables (`DATABASE_URL`/`DIRECT_URL` de tu base de Neon, dos secretos cualquiera para `SESSION_SECRET`/`QR_TOKEN_SECRET` — deben ser distintos entre sí, para que comprometer uno no comprometa el otro — y `NEXT_PUBLIC_APP_URL`, que en desarrollo alcanza con dejarlo en `http://localhost:3000`):
 
 ```bash
 cp .env.example .env
@@ -163,6 +163,16 @@ Abrir [http://localhost:3000](http://localhost:3000).
 | Admin — Umbrella Labs | `umbrellaadmin@example.com`                                    | `umbrellaadmin123` |
 | Participante          | `part@example.com` / `part2@example.com` / `part3@example.com` | `participant123`   |
 
+El seed no solo crea las cuentas: también deja datos de participación reales en el evento insignia de Acme (**Lyfter DevCon 2026**) para poder probar el panel de admin sin tener que canjear QRs a mano:
+
+- `part@example.com` completa el **100%** de los badges (revela el premio), con uno de sus canjes marcado `flagged` a propósito, para ver el stat card de "canjes flagged" con datos reales. También está inscrito en el evento de Neko, para confirmar que un mismo participante puede estar en eventos de más de una empresa.
+- `part2@example.com` queda en **75%** (progreso parcial).
+- `part3@example.com` solo tiene el badge de bienvenida (**25%**).
+
+Además, el seed carga 22 eventos en Acme Corp, 6 en Neko y 6 en Umbrella Labs (mezclando modalidades y estados) para poder probar paginación y el aislamiento multi-tenant entre `COMPANY_ADMIN` de distintas empresas.
+
+Sobre el ambiente de producción, también se cargaron a mano cerca de 15 participantes adicionales (fuera del seed), con distintos niveles de progreso y canjes, para tener volumen real al probar el dashboard, el leaderboard y los listados del panel de admin.
+
 ## Testing
 
 ```bash
@@ -179,6 +189,7 @@ src/
 │   ├── (public)/   # Landing, login, registro, vistas públicas
 │   ├── (participant)/ # Home, badges, leaderboard, perfil, escaneo de QR (mobile-first)
 │   ├── admin/      # Panel Super Admin / Admin de Empresa (dashboard, eventos, badges, usuarios, auditoría)
+│   ├── badge/[badgeId]/ # Página pública de un badge (sin auth), para compartir en redes
 │   └── api/        # Route Handlers (auth, QR generate/redeem, imagen og de badges)
 ├── modules/        # Lógica de negocio por dominio (repository → service → actions)
 ├── components/     # ui/ (primitivos shadcn), shared/, participant/, admin/
@@ -190,4 +201,4 @@ tests/unit/         # Suite de Vitest, un archivo por módulo
 
 ## Deploy
 
-Pensado para desplegarse en **Vercel**. Variables de entorno necesarias en producción (las mismas 4 de `.env.example`, con valores de producción): `DATABASE_URL`, `DIRECT_URL`, `SESSION_SECRET`, `QR_TOKEN_SECRET`. Como la app corre 100% serverless (sin cron ni procesos en background), no necesita ninguna configuración de infraestructura además de las variables de entorno y la conexión a la base de datos de Neon.
+Pensado para desplegarse en **Vercel**. Variables de entorno necesarias en producción (las mismas de `.env.example`, con valores de producción): `DATABASE_URL`, `DIRECT_URL`, `SESSION_SECRET`, `QR_TOKEN_SECRET`, y `NEXT_PUBLIC_APP_URL` apuntando al dominio real desplegado (`https://lyfter-badge-app.vercel.app`) — si queda en `localhost`, los crawlers de redes sociales (Twitter/LinkedIn/WhatsApp) no pueden resolver la imagen `og:image` al compartir un badge. Como la app corre 100% serverless (sin cron ni procesos en background), no necesita ninguna configuración de infraestructura además de las variables de entorno y la conexión a la base de datos de Neon.

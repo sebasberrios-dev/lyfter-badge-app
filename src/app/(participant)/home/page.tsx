@@ -73,7 +73,7 @@ export default async function HomePage() {
             </Link>
           </div>
         ) : (
-          <div className="space-y-3">
+          <div className="space-y-4">
             {registrations.slice(0, 3).map((registration) => (
               <EventSummaryCard
                 key={registration.eventId}
