@@ -1,0 +1,180 @@
+datasource db {
+  provider = "postgresql"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum Role {
+  PARTICIPANT
+  COMPANY_ADMIN
+  SUPER_ADMIN
+}
+
+enum EventModality {
+  ONSITE
+  VIRTUAL
+  HYBRID
+}
+
+enum EventStatus {
+  DRAFT
+  ACTIVE
+  FINISHED
+}
+
+enum BadgeType {
+  WELCOME
+  TALK
+  BOOTH
+  SPECIAL
+}
+
+enum BadgeRarity {
+  COMMON
+  RARE
+  LIMITED
+}
+
+model User {
+  id       Int    @id @default(autoincrement())
+  name     String
+  email    String @unique
+  password String
+  role     Role   @default(PARTICIPANT)
+
+  companyId Int?
+  company   Company? @relation(fields: [companyId], references: [id], onDelete: SetNull)
+
+  totalXp  Int     @default(0)
+  isActive Boolean @default(true)
+
+  registrations EventRegistration[]
+  redemptions   Redemption[]
+  auditLogs     AuditLog[]
+
+  @@index([totalXp])
+}
+
+model Company {
+  id    Int    @id @default(autoincrement())
+  name  String @unique
+
+  users User[]
+  events    Event[]
+  auditLogs AuditLog[]
+  dashboardSnapshots DashboardSnapshot[]
+}
+
+model Event {
+  id Int @id @default(autoincrement())
+
+  companyId Int
+  company   Company @relation(fields: [companyId], references: [id])
+
+  name             String
+  description      String
+  location         String
+  latitude         Float?
+  longitude         Float?
+  country          String
+  modality         EventModality
+  startDate        DateTime      @default(now())
+  endDate          DateTime
+  updatedAt        DateTime      @updatedAt
+  status           EventStatus   @default(DRAFT)
+  gallery          String[]
+  prizeDescription String?
+
+  badges        Badge[]
+  registrations EventRegistration[]
+  auditLogs     AuditLog[]
+}
+
+model Badge {
+  id Int @id @default(autoincrement())
+
+  eventId Int
+  event   Event @relation(fields: [eventId], references: [id])
+
+  name        String
+  description String
+  xpValue     Int
+  icon        String
+  type        BadgeType
+  rarity      BadgeRarity
+  qrToken     String      @unique
+
+  redemptions Redemption[]
+
+  @@index([eventId])
+}
+
+model EventRegistration {
+  userId Int
+  user   User @relation(fields: [userId], references: [id])
+
+  eventId Int
+  event   Event @relation(fields: [eventId], references: [id])
+
+  registeredAt DateTime @default(now())
+  eventXp      Int      @default(0)
+
+  @@id([userId, eventId])
+  @@index([eventId])
+}
+
+model Redemption {
+  userId Int
+  user   User @relation(fields: [userId], references: [id])
+
+  badgeId Int
+  badge   Badge @relation(fields: [badgeId], references: [id])
+
+  redeemAt DateTime @default(now())
+  flagged  Boolean  @default(false)
+
+  @@unique([userId, badgeId])
+  @@index([userId])
+  @@index([badgeId])
+}
+
+model AuditLog {
+  id Int @id @default(autoincrement())
+
+  userId Int
+  user   User @relation(fields: [userId], references: [id])
+
+  action   String
+  entity   String
+  entityId Int
+
+  companyId Int?
+  company   Company? @relation(fields: [companyId], references: [id], onDelete: SetNull)
+
+  eventId Int?
+  event   Event? @relation(fields: [eventId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+
+  @@index([companyId])
+  @@index([eventId])
+  @@index([createdAt])
+}
+
+model DashboardSnapshot {
+  id Int @id @default(autoincrement())
+
+  companyId Int?
+  company   Company? @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  date                  DateTime
+  attendeesCount        Int
+  totalRedemptionsCount Int @default(0)
+
+  createdAt DateTime @default(now())
+
+  @@index([companyId, date])
+}
+
